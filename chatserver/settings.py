@@ -16,7 +16,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware","django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-ROOT_URLCONF = "qsl_core.urls"
+ROOT_URLCONF = "chatserver.urls"
 TEMPLATES = [{
     "BACKEND":"django.template.backends.django.DjangoTemplates","DIRS":[],
     "APP_DIRS":True,"OPTIONS":{"context_processors":[
@@ -24,7 +24,7 @@ TEMPLATES = [{
         "django.contrib.auth.context_processors.auth","django.contrib.messages.context_processors.messages",
     ]}}
 ]
-WSGI_APPLICATION = "qsl_core.wsgi.application"
+WSGI_APPLICATION = "chatserver.wsgi.application"
 if os.environ.get("DB_NAME"):
     DATABASES = {"default":{
         "ENGINE":"django.db.backends.postgresql",
