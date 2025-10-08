@@ -56,3 +56,36 @@ class ChatSessionSerializer(serializers.ModelSerializer):
     def get_message_count(self, obj):
         return obj.messages.count()
 
+
+class ChatRequestSerializer(serializers.Serializer):
+    """Serializer for chat request"""
+    session_id = serializers.UUIDField(required=True)
+    message = serializers.CharField(required=True, max_length=4000)
+    retrieve = serializers.BooleanField(default=True)
+    top_k = serializers.IntegerField(default=3, min_value=1, max_value=10)
+    use_mmr = serializers.BooleanField(default=True)
+    lambda_param = serializers.FloatField(default=0.5, min_value=0.0, max_value=1.0)
+    model = serializers.CharField(default='gpt-4o-mini', max_length=50)
+    
+    def validate_message(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Message cannot be empty")
+        return value.strip()
+
+
+class RetrievedChunkSerializer(serializers.Serializer):
+    """Serializer for retrieved chunk in response"""
+    text = serializers.CharField()
+    score = serializers.FloatField()
+    document = serializers.CharField()
+    chunk_id = serializers.UUIDField()
+
+
+class ChatResponseSerializer(serializers.Serializer):
+    """Serializer for chat response"""
+    session_id = serializers.UUIDField()
+    message_id = serializers.UUIDField()
+    content = serializers.CharField()
+    retrieved_chunks = RetrievedChunkSerializer(many=True)
+    metadata = serializers.DictField()
+

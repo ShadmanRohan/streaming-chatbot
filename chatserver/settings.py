@@ -35,3 +35,21 @@ else:
     DATABASES = {"default":{"ENGINE":"django.db.backends.sqlite3","NAME": BASE_DIR / "db.sqlite3"}}
 LANGUAGE_CODE = "en-us"; TIME_ZONE = "UTC"; USE_I18N = True; USE_TZ = True
 STATIC_URL = "static/"; DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# OpenAI Configuration (API key from environment, never hardcoded)
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+
+# Chat Configuration
+CHAT_CONFIG = {
+    "context_messages": int(os.environ.get("CHAT_CONTEXT_MESSAGES", "10")),
+    "max_tokens": int(os.environ.get("CHAT_MAX_TOKENS", "2000")),
+    "temperature": float(os.environ.get("CHAT_TEMPERATURE", "0.7")),
+}
+
+# RAG Configuration
+RAG_CONFIG = {
+    "enabled": os.environ.get("RAG_ENABLED", "true").lower() == "true",
+    "top_k": int(os.environ.get("RAG_TOP_K", "3")),
+    "use_mmr": os.environ.get("RAG_USE_MMR", "true").lower() == "true",
+}

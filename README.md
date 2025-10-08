@@ -232,6 +232,77 @@ curl http://localhost:8000/api/sessions/{session-id}/
 
 ---
 
+### Chat (AI Conversation)
+
+#### POST `/api/chat/send/`
+Send a message and get AI response with RAG (Retrieval-Augmented Generation).
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/api/chat/send/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "session-uuid",
+    "message": "What is machine learning?",
+    "retrieve": true,
+    "top_k": 3,
+    "use_mmr": true,
+    "model": "gpt-4o-mini"
+  }'
+```
+
+**Parameters:**
+- `session_id` (required): Chat session UUID
+- `message` (required): User's message/question
+- `retrieve` (optional, default: true): Enable RAG retrieval
+- `top_k` (optional, default: 3): Number of chunks to retrieve
+- `use_mmr` (optional, default: true): Use MMR for diverse results
+- `lambda_param` (optional, default: 0.5): MMR trade-off parameter
+- `model` (optional, default: gpt-4o-mini): OpenAI model to use
+
+**Response:**
+```json
+{
+  "session_id": "session-uuid",
+  "message_id": "message-uuid",
+  "content": "Machine learning is a subset of artificial intelligence...",
+  "retrieved_chunks": [
+    {
+      "text": "ML definition from docs...",
+      "score": 0.89,
+      "document": "ml_basics.txt",
+      "chunk_id": "chunk-uuid"
+    }
+  ],
+  "metadata": {
+    "tokens_used": 450,
+    "retrieval_count": 3,
+    "context_messages": 2,
+    "model": "gpt-4o-mini"
+  }
+}
+```
+
+**Error Responses:**
+```json
+{
+  "error": "Session not found",
+  "code": "SESSION_NOT_FOUND"
+}
+
+{
+  "error": "LLM authentication failed. Please check API key configuration.",
+  "code": "LLM_AUTH_ERROR"
+}
+
+{
+  "error": "Rate limit exceeded. Please try again later.",
+  "code": "RATE_LIMIT_EXCEEDED"
+}
+```
+
+---
+
 ## Management Commands
 
 ### Ingest Documents
@@ -268,9 +339,22 @@ DB_PASSWORD=qsl_pass
 DB_HOST=localhost
 DB_PORT=5432
 
-# OpenAI (for future use)
-OPENAI_API_KEY=sk-...
+# OpenAI (REQUIRED for chat functionality)
+OPENAI_API_KEY=sk-your-api-key-here
+OPENAI_MODEL=gpt-4o-mini
+
+# Chat Configuration
+CHAT_CONTEXT_MESSAGES=10
+CHAT_MAX_TOKENS=2000
+CHAT_TEMPERATURE=0.7
+
+# RAG Configuration
+RAG_ENABLED=true
+RAG_TOP_K=3
+RAG_USE_MMR=true
 ```
+
+**Important:** The chat endpoint requires a valid OpenAI API key. Get one from [OpenAI Platform](https://platform.openai.com/api-keys).
 
 ### Database
 
@@ -407,8 +491,9 @@ curl -X POST http://localhost:8000/api/retrieve/ \
 
 ## Next Steps (Roadmap)
 
-- [ ] Phase 4: Chat endpoint with LLM integration
-- [ ] Phase 5: LangGraph orchestration
+- [x] Phase 0-3: Project setup, models, retrieval, MMR ✅
+- [x] Phase 4: Chat endpoint with LLM integration ✅
+- [ ] Phase 5: LangGraph orchestration  
 - [ ] Phase 6: Streaming responses (SSE)
 - [ ] Phase 7: Session memory & summarization
 - [ ] Phase 8: Rate limiting, CORS, observability
