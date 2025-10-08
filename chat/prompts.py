@@ -20,7 +20,7 @@ def sanitize_user_input(message: str) -> str:
     Returns:
         Sanitized message
     """
-    # Remove potential prompt injection patterns
+    # Remove potential prompt injection patterns (case-insensitive)
     dangerous_patterns = [
         'ignore previous instructions',
         'ignore all previous',
@@ -32,8 +32,19 @@ def sanitize_user_input(message: str) -> str:
     ]
     
     cleaned = message
+    cleaned_lower = cleaned.lower()
+    
     for pattern in dangerous_patterns:
-        cleaned = cleaned.replace(pattern, '')
+        # Find and remove pattern case-insensitively
+        start_idx = 0
+        while True:
+            idx = cleaned_lower.find(pattern, start_idx)
+            if idx == -1:
+                break
+            # Remove the pattern from both strings
+            cleaned = cleaned[:idx] + cleaned[idx + len(pattern):]
+            cleaned_lower = cleaned_lower[:idx] + cleaned_lower[idx + len(pattern):]
+            start_idx = idx
     
     return cleaned.strip()
 
