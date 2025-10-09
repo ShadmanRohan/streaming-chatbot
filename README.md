@@ -2,20 +2,20 @@
 
 Django 5 backend with document ingestion, semantic search (with MMR), LangGraph orchestration, and streaming chat capabilities.
 
-🔗 **Live Demo**: [https://shadmanrohan.gitlab.io/streaming-chat/](https://shadmanrohan.gitlab.io/streaming-chat/)  
-🚀 **Backend API**: [https://191.101.81.150](https://191.101.81.150)
+🚀 **Live Demo**: [http://localhost:8000/demo/](http://localhost:8000/demo/) (when running locally)  
+🌐 **Production Server**: [https://191.101.81.150](https://191.101.81.150)
 
 ## Features
 
-- 📄 **Document Management**: Upload and process text documents
+- 📄 **Document Management**: Upload and process text documents (500KB limit, .txt only)
 - 🔍 **Semantic Search**: SBERT embeddings with cosine similarity
 - 🎯 **MMR (Maximal Marginal Relevance)**: Diverse, relevant retrieval results
-- 💬 **Chat Sessions**: Conversation management with message history
-- 🧠 **Advanced Memory**: Token-bounded history + rolling summaries
-- 🔄 **LangGraph Orchestration**: Multi-node workflow for RAG and chat
+- 💬 **Session-Based Chat**: Independent sessions with document binding
+- 🧠 **Smart Memory**: Token-bounded history (3000 tokens) + rolling summaries (every 5 turns)
+- 🔄 **LangGraph Orchestration**: Multi-node workflow with intelligent retrieval decisions
 - ⚡ **Real-time Streaming**: Server-Sent Events (SSE) for token-by-token responses
-- 🗄️ **PostgreSQL Database**: Production-ready database for persistence
-- 🧪 **Comprehensive Tests**: 34 unit and integration tests
+- 🗄️ **PostgreSQL Database**: Production-ready database with session isolation
+- 🎯 **Intelligent Retrieval**: Automatic RAG triggering based on message content
 
 ---
 
@@ -97,24 +97,34 @@ curl http://localhost:8000/health/
 ### Documents
 
 #### POST `/api/documents/upload/`
-Upload and process a document.
+Upload and process a document. Documents are bound to chat sessions for isolation.
 
 ```bash
 curl -X POST http://localhost:8000/api/documents/upload/ \
   -F "file=@document.txt" \
-  -F "auto_process=true"
+  -F "auto_process=true" \
+  -F "session_id=session-uuid"
 ```
+
+**Parameters:**
+- `file` (required): Text file (.txt only, max 500KB)
+- `auto_process` (optional, default: true): Automatically chunk and embed
+- `session_id` (optional): Bind document to specific session
 
 **Response:**
 ```json
 {
   "id": "uuid-here",
   "filename": "document.txt",
+  "file_size": 1024,
   "chunk_count": 5,
   "auto_processed": true,
+  "session_id": "session-uuid",
   "created_at": "2025-10-08T12:00:00Z"
 }
 ```
+
+**Note:** Uploading a new document to an existing session will delete previous documents and chat history for that session.
 
 #### GET `/api/documents/`
 List all documents.
@@ -193,14 +203,14 @@ curl -X POST http://localhost:8000/api/retrieve/ \
   }'
 ```
 
-**Filter by document:**
+**Filter by session:**
 ```bash
 curl -X POST http://localhost:8000/api/retrieve/ \
   -H "Content-Type: application/json" \
   -d '{
     "query": "search text",
     "top_k": 5,
-    "document_ids": ["doc-uuid-1", "doc-uuid-2"]
+    "session_id": "session-uuid"
   }'
 ```
 
@@ -209,7 +219,7 @@ curl -X POST http://localhost:8000/api/retrieve/ \
 - `top_k` (optional, default: 3): Number of results to return
 - `use_mmr` (optional, default: true): Enable MMR for diversity
 - `lambda_param` (optional, default: 0.5): MMR trade-off (0=diversity, 1=relevance)
-- `document_ids` (optional): Filter by specific document IDs
+- `session_id` (optional): Filter by specific session (retrieves only session's documents)
 
 **Response:**
 ```json
@@ -266,18 +276,15 @@ curl http://localhost:8000/api/sessions/{session-id}/
 Send a message and get AI response with RAG (Retrieval-Augmented Generation).
 
 #### POST `/api/chat/stream/` (Streaming - SSE)
-Send a message and receive AI response via Server-Sent Events (streaming).
+Send a message and receive AI response via Server-Sent Events (streaming). Retrieval is automatically triggered based on message content.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8000/api/chat/send/ \
+curl -X POST http://localhost:8000/api/chat/stream/ \
   -H "Content-Type: application/json" \
   -d '{
     "session_id": "session-uuid",
     "message": "What is machine learning?",
-    "retrieve": true,
-    "top_k": 3,
-    "use_mmr": true,
     "model": "gpt-4o-mini"
   }'
 ```
@@ -285,11 +292,14 @@ curl -X POST http://localhost:8000/api/chat/send/ \
 **Parameters:**
 - `session_id` (required): Chat session UUID
 - `message` (required): User's message/question
-- `retrieve` (optional, default: true): Enable RAG retrieval
-- `top_k` (optional, default: 3): Number of chunks to retrieve
-- `use_mmr` (optional, default: true): Use MMR for diverse results
-- `lambda_param` (optional, default: 0.5): MMR trade-off parameter
 - `model` (optional, default: gpt-4o-mini): OpenAI model to use
+
+**Retrieval Triggering:**
+The system automatically determines when to use RAG based on:
+- Question words: "what", "how", "why", "when", "where", "who", "explain", "tell", "describe", "give", "show", "list", "provide"
+- Question marks: Any message ending with "?"
+- Long messages: More than 10 words
+- Document references: Messages containing "document", "file", "source", "according to", "based on"
 
 **Response:**
 ```json
@@ -508,6 +518,7 @@ The chatbot follows a **modular, orchestrated architecture** using LangGraph to 
 - **Dimensions**: 384-dimensional vectors
 - **Similarity**: Cosine similarity
 - **MMR Algorithm**: Maximal Marginal Relevance for diverse results
+- **Session Filtering**: Only retrieves chunks from documents bound to the current session
 - **Configurable**: `top_k`, `lambda_param` (relevance vs diversity)
 
 #### 3. **Chat Memory Design** (`chat/langgraph/nodes/load_history.py`, `chat/models.py`)
@@ -547,21 +558,25 @@ MEMORY_CONFIG = {
 #### 4. **LangGraph Orchestration** (`chat/langgraph/`)
 
 **Graph Nodes:**
-1. **`load_history`**: Loads and trims conversation history
-2. **`decide_retrieve`**: Heuristic to determine if RAG is needed
-3. **`retrieve`**: Performs semantic search with MMR
+1. **`load_history`**: Loads and trims conversation history (3000 token limit, 6 turn minimum)
+2. **`decide_retrieve`**: Heuristic to determine if RAG is needed based on message content
+3. **`retrieve`**: Performs semantic search with MMR (session-filtered)
 4. **`synthesize`**: Generates LLM response (synchronous)
 5. **`synthesize_stream`**: Generates LLM response (streaming)
-6. **`summarize`**: Updates long-term session summary
+6. **`summarize`**: Updates long-term session summary (every 5 assistant turns)
 
 **Workflow:**
 ```
-load_history → decide_retrieve → [retrieve?] → synthesize → summarize
+load_history → decide_retrieve → [retrieve?] → synthesize_stream → summarize
 ```
 
-**Conditional Logic:**
-- RAG retrieval only triggered for questions, long messages, or explicit requests
-- Summarization only runs every N assistant turns
+**Retrieval Decision Logic:**
+The `decide_retrieve` node uses heuristics to determine if RAG is needed:
+- **Question words**: what, how, why, when, where, who, explain, tell, describe, give, show, list, provide
+- **Question marks**: Any message ending with "?"
+- **Long messages**: More than 10 words
+- **Document references**: Contains "document", "file", "source", "according to", "based on"
+- **Excludes simple responses**: hi, hello, thanks, ok, yes, no
 
 #### 5. **LLM Integration** (`chat/llm.py`)
 - **Provider**: OpenAI API
@@ -672,28 +687,32 @@ chatserver/
 
 ## 🌐 Live Demo
 
-**Try it now**: [https://shadmanrohan.gitlab.io/streaming-chat/](https://shadmanrohan.gitlab.io/streaming-chat/)
+**Local Demo**: [http://localhost:8000/demo/](http://localhost:8000/demo/) (when running locally)  
+**Production Demo**: [https://191.101.81.150](https://191.101.81.150)
 
 **Features:**
-- 🎯 **Session Management**: Start new chat sessions with one click
+- 📄 **Document Upload**: Upload .txt files (max 500KB) and bind to chat sessions
+- 🎯 **Session Management**: Independent sessions with document isolation
 - ⚡ **Real-time Streaming**: See AI responses token-by-token as they're generated
+- 🔍 **Smart Retrieval**: Automatic RAG triggering based on message content
 - 💬 **Conversation History**: View full chat history in the UI
 - 🔄 **Error Handling**: Graceful handling of connection issues
-- 🎨 **Modern UI**: Clean, responsive design
-- ✅ **No HTTPS warnings**: Served securely via GitLab Pages
+- 🎨 **Modern UI**: Clean, responsive design with clear workflow instructions
 
 **How to Use:**
-1. Click "Start Chat" to create a new session
-2. Type your message and press Enter or click "Send"
-3. Watch the AI response stream in real-time
-4. Click "Reset Chat" to start a new conversation
+1. **Upload Document**: Choose a .txt file (max 500KB) and click "Upload & Process"
+2. **Wait for Processing**: File is chunked and embedded (button turns green)
+3. **Start Chat**: Click "🚀 Start Chat" to begin conversation
+4. **Ask Questions**: Type questions about your document
+5. **Reset**: Click "🔄 Reset Chat" to start over with a new document
 
 **Technical Details:**
-- Frontend hosted on GitLab Pages (HTTPS)
-- Backend API at `https://191.101.81.150`
+- Session-based document binding (one document per session)
+- Automatic retrieval triggering for questions and long messages
+- Token-bounded memory (3000 tokens, 6 turn minimum)
+- Rolling summaries every 5 assistant turns
 - Uses Fetch API with streaming response
 - Handles `delta`, `done`, and `error` events
-- Session persistence across messages
 
 ---
 
@@ -701,85 +720,49 @@ chatserver/
 
 ### Running Locally
 
-If you want to run the project on your local machine:
-
 1. Follow the [Quick Start](#quick-start) instructions
 2. Access the local demo at: `http://localhost:8000/demo/`
 3. Or use the API directly (see [API Endpoints](#api-endpoints))
 
-### Add New Document
+### Upload and Test Documents
 ```bash
-# Via API
-curl -X POST http://localhost:8000/api/documents/upload/ \
-  -F "file=@mydoc.txt"
+# Create a session first
+curl -X POST http://localhost:8000/api/sessions/ \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Test Session"}'
 
-# Via admin
-# Go to http://localhost:8000/admin/chat/document/
+# Upload document to session
+curl -X POST http://localhost:8000/api/documents/upload/ \
+  -F "file=@mydoc.txt" \
+  -F "session_id=your-session-uuid"
+
+# Test chat with automatic retrieval
+curl -X POST http://localhost:8000/api/chat/stream/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "your-session-uuid",
+    "message": "What is this document about?"
+  }'
 ```
 
-### Test Retrieval
+### Test Retrieval Logic
 ```bash
-# Search across all documents
+# Test session-specific retrieval
 curl -X POST http://localhost:8000/api/retrieve/ \
   -H "Content-Type: application/json" \
-  -d '{"query": "your search query", "top_k": 5}'
+  -d '{
+    "query": "your search query",
+    "session_id": "your-session-uuid",
+    "top_k": 5
+  }'
 ```
 
 ### Admin Interface
 ```bash
 # Access at http://localhost:8000/admin/
+# View sessions, documents, chunks, and messages
 # Username/password: Set with createsuperuser
 ```
-
----
-
-## Project Roadmap
-
-### ✅ Completed Phases
-
-- **Phase 0-1**: Project setup, Django configuration, PostgreSQL integration
-- **Phase 2**: Models (Document, DocumentChunk, ChatSession, ChatMessage)
-- **Phase 3**: Document chunking, SBERT embeddings, semantic search
-- **Phase 3.5**: MMR (Maximal Marginal Relevance) for diverse retrieval
-- **Phase 4**: Chat endpoint with OpenAI LLM integration
-- **Phase 5**: LangGraph orchestration (6 nodes, conditional workflow)
-- **Phase 6**: Streaming responses with Server-Sent Events (SSE)
-- **Phase 7**: Two-tier memory (token-bounded history + rolling summaries)
-- **Phase 8**: CORS configuration, environment variables, security
-- **Phase 9**: Comprehensive testing (34 tests), documentation, demo UI
-
-### 🚀 Future Enhancements
-
-**Performance & Scalability:**
-- [ ] Redis caching for embeddings and LLM responses
-- [ ] Celery for async document processing
-- [ ] pgvector extension for native vector operations
-- [ ] Query result caching with TTL
-
-**Features:**
-- [ ] Multi-document chat (filter by document IDs)
-- [ ] Citation tracking (which chunks influenced response)
-- [ ] Conversation export (JSON, PDF)
-- [ ] User authentication & authorization
-- [ ] Multi-user support with permissions
-
-**Observability:**
-- [ ] Prometheus metrics (latency, token usage, error rates)
-- [ ] Structured logging with correlation IDs
-- [ ] OpenTelemetry tracing for LangGraph nodes
-- [ ] Cost tracking dashboard (OpenAI API usage)
-
-**Advanced RAG:**
-- [ ] Hybrid search (semantic + keyword BM25)
-- [ ] Re-ranking with cross-encoder models
-- [ ] Query expansion and reformulation
-- [ ] Multi-hop reasoning for complex queries
-
-**Production:**
-- [ ] Docker Compose for local development
-- [ ] Kubernetes deployment manifests
-- [ ] CI/CD pipeline (GitHub Actions)
-- [ ] Load testing and benchmarks
 
 ---
 

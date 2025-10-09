@@ -473,11 +473,14 @@
             try {
                 // Create session FIRST if it doesn't exist
                 if (!currentSessionId) {
+                    console.log('Upload: Creating new session...');
                     const sessionResp = await fetch(`${API_BASE}/sessions/`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ title: 'RAG Demo Session' })
                     });
+                    
+                    console.log('Upload: Session creation response:', sessionResp);
                     
                     if (!sessionResp.ok) {
                         throw new Error('Failed to create session');
@@ -485,7 +488,7 @@
                     
                     const sessionData = await sessionResp.json();
                     currentSessionId = sessionData.id;
-                    console.log('Created session:', currentSessionId);
+                    console.log('Upload: Created session:', currentSessionId);
                 }
                 
                 const formData = new FormData();
@@ -495,10 +498,21 @@
                 // Always attach to session (now guaranteed to exist)
                 formData.append('session_id', currentSessionId);
                 
+                console.log('Upload: Starting document upload...');
+                
+                // Add timeout to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                
                 const response = await fetch(`${API_BASE}/documents/upload/`, {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
+                
+                console.log('Upload: Document upload response:', response);
                 
                 if (!response.ok) {
                     const errorData = await response.json();
@@ -506,19 +520,44 @@
                 }
                 
                 const data = await response.json();
+                console.log('Upload: Document upload successful:', data);
                 currentDocumentData = data;
+                
+                console.log('Upload: Updating UI...');
                 
                 // Show success
                 statusDiv.className = 'upload-status success';
                 statusDiv.textContent = `✅ Success! Document processed: ${data.chunk_count} chunks created. Ready to chat!`;
+                console.log('Upload: Status message updated');
                 
                 // Update current document display
                 updateDocumentDisplay(data);
+                console.log('Upload: Document display updated');
                 
                 // Enable "Start Chat" button (make it green/ready)
+                console.log('Upload: startChatBtn element:', startChatBtn);
+                console.log('Upload: startChatBtn before update:', {
+                    disabled: startChatBtn.disabled,
+                    textContent: startChatBtn.textContent,
+                    style: startChatBtn.style.background
+                });
+                
                 startChatBtn.disabled = false;
                 startChatBtn.textContent = '🚀 Start Chat';
-                startChatBtn.style.background = '#28a745';
+                
+                // Force green background with !important to override CSS
+                startChatBtn.style.setProperty('background', '#28a745', 'important');
+                startChatBtn.style.setProperty('background-color', '#28a745', 'important');
+                
+                startChatBtn.classList.remove('disabled');
+                startChatBtn.classList.add('ready');
+                
+                console.log('Upload: startChatBtn after update:', {
+                    disabled: startChatBtn.disabled,
+                    textContent: startChatBtn.textContent,
+                    style: startChatBtn.style.background
+                });
+                console.log('Upload: Button updated to green');
                 
                 // Reset file input for potential re-upload
                 fileInput.value = '';
@@ -535,8 +574,14 @@
                 }
                 
             } catch (error) {
-                statusDiv.className = 'upload-status error';
-                statusDiv.textContent = `❌ Upload failed: ${error.message}`;
+                console.log('Upload error:', error);
+                if (error.name === 'AbortError') {
+                    statusDiv.className = 'upload-status error';
+                    statusDiv.textContent = '❌ Upload timed out after 30 seconds. Please try again.';
+                } else {
+                    statusDiv.className = 'upload-status error';
+                    statusDiv.textContent = `❌ Upload failed: ${error.message}`;
+                }
                 uploadBtn.disabled = false;
                 uploadBtn.textContent = 'Upload & Process';
                 uploadBtn.classList.remove('processing');
@@ -557,27 +602,43 @@
 
         // Handle Start Chat button
         async function handleStartChat() {
+            console.log('🎯 handleStartChat called!');
             const btn = document.getElementById('startChatBtn');
             
-            if (currentSessionId) {
-                // Reset chat
+            console.log('handleStartChat: currentSessionId exists?', !!currentSessionId);
+            console.log('handleStartChat: currentDocumentData exists?', !!currentDocumentData);
+            console.log('handleStartChat: button text:', btn.textContent);
+            
+            // Check if we're in "Start Chat" mode or "Reset Chat" mode
+            if (btn.textContent.includes('Start Chat')) {
+                console.log('🚀 Starting new chat...');
+                await startChat();
+            } else if (btn.textContent.includes('Reset Chat')) {
+                console.log('🔄 Resetting chat...');
                 resetChat();
             } else {
-                // Start new chat
+                console.log('❓ Unknown button state, defaulting to start chat');
                 await startChat();
             }
         }
 
         // Start a new chat session
         async function startChat() {
+            console.log('🚀 startChat function called!');
+            console.log('startChat called, currentDocumentData:', currentDocumentData);
+            console.log('startChat called, currentSessionId:', currentSessionId);
+            
             if (!currentDocumentData) {
                 alert('Please upload a document first!');
                 return;
             }
             
             try {
+                console.log('✅ startChat: Starting try block');
+                
                 // Session was already created during upload, just show the UI
                 if (!currentSessionId) {
+                    console.log('❌ No session ID, creating new session...');
                     // Fallback: create session if somehow it doesn't exist
                     const response = await fetch(`${API_BASE}/sessions/`, {
                         method: 'POST',
@@ -585,26 +646,37 @@
                         body: JSON.stringify({ title: 'RAG Demo Session' })
                     });
                     
+                    console.log('Session creation response:', response);
+                    
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                     }
                     
                     const data = await response.json();
                     currentSessionId = data.id;
+                    console.log('Created session:', currentSessionId);
                 }
+                
+                console.log('✅ startChat: Updating UI elements');
                 
                 // Update UI
                 document.getElementById('sessionIdLabel').textContent = currentSessionId;
                 document.getElementById('sessionInfo').classList.add('active');
                 document.getElementById('chatContainer').classList.add('active');
                 
+                console.log('✅ startChat: UI elements updated');
+                
                 const startChatBtn = document.getElementById('startChatBtn');
                 startChatBtn.textContent = '🔄 Reset Chat';
                 startChatBtn.classList.add('active');
                 
+                console.log('✅ startChat: Button updated');
+                
                 // Show welcome message
                 document.getElementById('chatBox').innerHTML = '';
                 addMessage('system', `✅ Chat session started! You can now ask questions about "${currentDocumentData.filename}"`);
+                
+                console.log('✅ startChat: Welcome message added');
                 
             } catch (error) {
                 alert(`Failed to create session: ${error.message}`);
@@ -678,11 +750,16 @@
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
 
+                console.log('📡 Starting to read stream...');
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) break;
+                    if (done) {
+                        console.log('📡 Stream finished');
+                        break;
+                    }
 
                     const chunk = decoder.decode(value, { stream: true });
+                    console.log('📡 Received chunk:', chunk);
                     const lines = chunk.split('\n');
 
                     for (const line of lines) {
