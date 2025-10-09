@@ -2,6 +2,9 @@
 
 Django 5 backend with document ingestion, semantic search (with MMR), LangGraph orchestration, and streaming chat capabilities.
 
+🔗 **Live Demo**: [https://shadmanrohan.gitlab.io/streaming-chat/](https://shadmanrohan.gitlab.io/streaming-chat/)  
+🚀 **Backend API**: [https://191.101.81.150](https://191.101.81.150)
+
 ## Features
 
 - 📄 **Document Management**: Upload and process text documents
@@ -669,9 +672,17 @@ chatserver/
 
 ## Interactive Demo
 
-### Streaming Chat UI
+### 🌐 Live Demo (GitLab Pages)
 
-Access the interactive demo at: **http://localhost:8000/demo/**
+**Production Demo**: [https://shadmanrohan.gitlab.io/streaming-chat/](https://shadmanrohan.gitlab.io/streaming-chat/)
+
+✅ **No HTTPS warnings** - Served via GitLab Pages  
+✅ **Connects to backend** at `https://191.101.81.150`  
+✅ **Full streaming functionality** - Real-time AI responses
+
+### 🏠 Local Demo
+
+Access the local demo at: **http://localhost:8000/demo/**
 
 **Features:**
 - 🎯 **Session Management**: Start new chat sessions with one click
@@ -687,8 +698,8 @@ Access the interactive demo at: **http://localhost:8000/demo/**
 4. Click "Reset Chat" to start a new conversation
 
 **Technical Details:**
-- Uses `EventSource` API for SSE
-- Handles `token`, `done`, and `error` events
+- Uses `Fetch API` with streaming response
+- Handles `delta`, `done`, and `error` events
 - Displays session ID for debugging
 - Auto-scrolls to latest messages
 
