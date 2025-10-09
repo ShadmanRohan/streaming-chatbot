@@ -41,7 +41,9 @@ if os.environ.get("DB_NAME"):
 else:
     DATABASES = {"default":{"ENGINE":"django.db.backends.sqlite3","NAME": BASE_DIR / "db.sqlite3"}}
 LANGUAGE_CODE = "en-us"; TIME_ZONE = "UTC"; USE_I18N = True; USE_TZ = True
-STATIC_URL = "static/"; DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # OpenAI Configuration (API key from environment, never hardcoded)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
