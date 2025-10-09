@@ -2,8 +2,9 @@
 
 Django 5 backend with document ingestion, semantic search (with MMR), LangGraph orchestration, and streaming chat capabilities.
 
-🚀 **Live Demo**: [http://localhost:8000/demo/](http://localhost:8000/demo/) (when running locally)  
-🌐 **Production Server**: [https://191.101.81.150](https://191.101.81.150)
+🚀 **Live Demo**: [https://shadmanrohan.gitlab.io/streaming-chat/](https://shadmanrohan.gitlab.io/streaming-chat/) (GitLab Pages)  
+🌐 **Production Server**: [https://191.101.81.150](https://191.101.81.150) (Direct server access)  
+💻 **Local Development**: [http://localhost:8000/demo/](http://localhost:8000/demo/) (when running locally)
 
 ## Features
 
@@ -687,8 +688,9 @@ chatserver/
 
 ## 🌐 Live Demo
 
-**Local Demo**: [http://localhost:8000/demo/](http://localhost:8000/demo/) (when running locally)  
-**Production Demo**: [https://191.101.81.150](https://191.101.81.150)
+**GitLab Pages**: [https://shadmanrohan.gitlab.io/streaming-chat/](https://shadmanrohan.gitlab.io/streaming-chat/) (Public demo)  
+**Production Server**: [https://191.101.81.150](https://191.101.81.150) (Direct server access)  
+**Local Development**: [http://localhost:8000/demo/](http://localhost:8000/demo/) (when running locally)
 
 **Features:**
 - 📄 **Document Upload**: Upload .txt files (max 500KB) and bind to chat sessions
