@@ -670,42 +670,42 @@ chatserver/
 
 ---
 
-## Interactive Demo
+## 🌐 Live Demo
 
-### 🌐 Live Demo (GitLab Pages)
-
-**Production Demo**: [https://shadmanrohan.gitlab.io/streaming-chat/](https://shadmanrohan.gitlab.io/streaming-chat/)
-
-✅ **No HTTPS warnings** - Served via GitLab Pages  
-✅ **Connects to backend** at `https://191.101.81.150`  
-✅ **Full streaming functionality** - Real-time AI responses
-
-### 🏠 Local Demo
-
-Access the local demo at: **http://localhost:8000/demo/**
+**Try it now**: [https://shadmanrohan.gitlab.io/streaming-chat/](https://shadmanrohan.gitlab.io/streaming-chat/)
 
 **Features:**
 - 🎯 **Session Management**: Start new chat sessions with one click
-- ⚡ **Real-time Streaming**: See AI responses token-by-token
-- 💬 **Chat History**: View full conversation in the UI
-- 🔄 **Auto-reconnect**: Handles connection drops gracefully
+- ⚡ **Real-time Streaming**: See AI responses token-by-token as they're generated
+- 💬 **Conversation History**: View full chat history in the UI
+- 🔄 **Error Handling**: Graceful handling of connection issues
 - 🎨 **Modern UI**: Clean, responsive design
+- ✅ **No HTTPS warnings**: Served securely via GitLab Pages
 
-**Usage:**
+**How to Use:**
 1. Click "Start Chat" to create a new session
-2. Type your message and click "Send"
+2. Type your message and press Enter or click "Send"
 3. Watch the AI response stream in real-time
 4. Click "Reset Chat" to start a new conversation
 
 **Technical Details:**
-- Uses `Fetch API` with streaming response
+- Frontend hosted on GitLab Pages (HTTPS)
+- Backend API at `https://191.101.81.150`
+- Uses Fetch API with streaming response
 - Handles `delta`, `done`, and `error` events
-- Displays session ID for debugging
-- Auto-scrolls to latest messages
+- Session persistence across messages
 
 ---
 
 ## Development
+
+### Running Locally
+
+If you want to run the project on your local machine:
+
+1. Follow the [Quick Start](#quick-start) instructions
+2. Access the local demo at: `http://localhost:8000/demo/`
+3. Or use the API directly (see [API Endpoints](#api-endpoints))
 
 ### Add New Document
 ```bash
