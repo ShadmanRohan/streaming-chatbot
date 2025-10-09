@@ -25,7 +25,7 @@ def decide_retrieve(state: Dict[str, Any]) -> Dict[str, Any]:
     message = state['last_user_msg'].lower()
     
     # Heuristic 1: Contains question indicators
-    question_words = ['what', 'how', 'why', 'when', 'where', 'who', 'explain', 'tell', 'describe']
+    question_words = ['what', 'how', 'why', 'when', 'where', 'who', 'explain', 'tell', 'describe', 'give', 'show', 'list', 'provide']
     has_question = any(word in message for word in question_words) or '?' in message
     
     # Heuristic 2: References documents or sources
