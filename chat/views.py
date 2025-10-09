@@ -40,12 +40,25 @@ class DocumentViewSet(viewsets.ModelViewSet):
     def upload(self, request):
         """
         Upload a document and optionally auto-process (chunk + embed)
+        Binds document to session if session_id provided
         """
         serializer = DocumentUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         uploaded_file = serializer.validated_data['file']
         auto_process = serializer.validated_data.get('auto_process', True)
+        session_id = serializer.validated_data.get('session_id')
+        
+        # Validate session if provided
+        session = None
+        if session_id:
+            try:
+                session = ChatSession.objects.get(id=session_id)
+            except ChatSession.DoesNotExist:
+                return Response(
+                    {'error': 'Session not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
         
         # Read file content
         try:
@@ -56,11 +69,13 @@ class DocumentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Create document
+        # Create document with session binding
         with transaction.atomic():
             document = Document.objects.create(
                 filename=uploaded_file.name,
-                raw_text=content
+                raw_text=content,
+                file_size=uploaded_file.size,
+                session=session
             )
             
             chunk_count = 0
@@ -80,8 +95,10 @@ class DocumentViewSet(viewsets.ModelViewSet):
         return Response({
             'id': str(document.id),
             'filename': document.filename,
+            'file_size': uploaded_file.size,
             'chunk_count': chunk_count,
             'auto_processed': auto_process,
+            'session_id': str(session.id) if session else None,
             'created_at': document.created_at
         }, status=status.HTTP_201_CREATED)
     

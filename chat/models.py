@@ -29,6 +29,8 @@ class Document(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     filename = models.CharField(max_length=255)
     raw_text = models.TextField()
+    file_size = models.PositiveIntegerField(default=0, help_text="File size in bytes")
+    session = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="documents", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

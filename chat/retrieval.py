@@ -73,7 +73,8 @@ def search(
     top_k: int = 3,
     use_mmr: bool = True,
     lambda_param: float = 0.5,
-    document_ids: Optional[List[str]] = None
+    document_ids: Optional[List[str]] = None,
+    session_id: Optional[str] = None
 ) -> List[Tuple[float, DocumentChunk]]:
     """
     Advanced search with MMR and filtering options.
@@ -84,6 +85,7 @@ def search(
         use_mmr: Whether to apply MMR for diversity (default True)
         lambda_param: MMR trade-off parameter (0=diversity, 1=relevance)
         document_ids: Optional list of document IDs to filter by
+        session_id: Optional session ID to filter documents by session
         
     Returns:
         List of (score, chunk) tuples ordered by relevance/MMR
@@ -92,6 +94,10 @@ def search(
     
     # Get all chunks with embeddings
     chunks_query = DocumentChunk.objects.filter(embedding__isnull=False)
+    
+    # Filter by session if provided
+    if session_id:
+        chunks_query = chunks_query.filter(document__session_id=session_id)
     
     # Filter by document IDs if provided
     if document_ids:

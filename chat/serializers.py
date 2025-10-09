@@ -19,7 +19,7 @@ class DocumentSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Document
-        fields = ['id', 'filename', 'raw_text', 'chunk_count', 'chunks', 'created_at']
+        fields = ['id', 'filename', 'raw_text', 'file_size', 'session', 'chunk_count', 'chunks', 'created_at']
         read_only_fields = ['id', 'created_at']
     
     def get_chunk_count(self, obj):
@@ -29,11 +29,12 @@ class DocumentSerializer(serializers.ModelSerializer):
 class DocumentUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
     auto_process = serializers.BooleanField(default=True)
+    session_id = serializers.UUIDField(required=False, allow_null=True)
     
     def validate_file(self, value):
-        # Limit file size to 10MB
-        if value.size > 10 * 1024 * 1024:
-            raise serializers.ValidationError("File size cannot exceed 10MB")
+        # Limit file size to 500KB
+        if value.size > 500 * 1024:
+            raise serializers.ValidationError(f"File size ({value.size / 1024:.1f}KB) exceeds 500KB limit")
         return value
 
 

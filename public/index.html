@@ -275,7 +275,7 @@
                 <div class="file-input-wrapper">
                     <input type="file" id="fileInput" accept=".txt" />
                     <label for="fileInput" id="fileLabel" class="file-input-label">
-                        📄 Choose a .txt file (max 5MB)
+                        📄 Choose a .txt file (max 500KB)
                     </label>
                 </div>
                 <button onclick="uploadDocument()" id="uploadBtn" class="upload-btn" disabled>Upload & Process</button>
@@ -320,7 +320,7 @@
         const API_BASE = 'https://191.101.81.150/api';
         let currentSessionId = null;
         let currentFile = null;
-        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+        const MAX_FILE_SIZE = 500 * 1024; // 500KB in bytes
 
         // File input handling
         document.getElementById('fileInput').addEventListener('change', function(e) {
@@ -335,7 +335,7 @@
             
             if (!file) {
                 currentFile = null;
-                label.textContent = '📄 Choose a .txt file (max 5MB)';
+                label.textContent = '📄 Choose a .txt file (max 500KB)';
                 label.classList.remove('has-file');
                 uploadBtn.disabled = true;
                 return;
@@ -385,6 +385,9 @@
                 const formData = new FormData();
                 formData.append('file', currentFile);
                 formData.append('auto_process', 'true');
+                if (currentSessionId) {
+                    formData.append('session_id', currentSessionId);
+                }
                 
                 const response = await fetch(`${API_BASE}/documents/upload/`, {
                     method: 'POST',
@@ -403,7 +406,7 @@
                 // Reset file input
                 fileInput.value = '';
                 currentFile = null;
-                label.textContent = '📄 Choose a .txt file (max 5MB)';
+                label.textContent = '📄 Choose a .txt file (max 500KB)';
                 label.classList.remove('has-file');
                 
                 // Reload documents list
@@ -418,6 +421,12 @@
 
         // Load documents list
         async function loadDocuments() {
+            // Only load documents for current session
+            if (!currentSessionId) {
+                document.getElementById('documentsList').innerHTML = '<div class="no-documents">Start a chat session to upload documents</div>';
+                return;
+            }
+            
             try {
                 const response = await fetch(`${API_BASE}/documents/`);
                 if (!response.ok) throw new Error('Failed to load documents');
@@ -430,12 +439,21 @@
                     return;
                 }
                 
-                listDiv.innerHTML = documents.map(doc => `
-                    <div class="document-item">
-                        <span>📄 ${doc.filename}</span>
-                        <span class="chunk-count">${doc.chunk_count} chunks</span>
-                    </div>
-                `).join('');
+                listDiv.innerHTML = documents
+                    .filter(doc => !doc.session || doc.session === currentSessionId)
+                    .map(doc => {
+                        const sizeKB = (doc.file_size / 1024).toFixed(1);
+                        return `
+                            <div class="document-item">
+                                <span>📄 ${doc.filename} (${sizeKB}KB)</span>
+                                <span class="chunk-count">${doc.chunk_count} chunks</span>
+                            </div>
+                        `;
+                    }).join('');
+                
+                if (listDiv.innerHTML === '') {
+                    listDiv.innerHTML = '<div class="no-documents">No documents uploaded for this session</div>';
+                }
                 
             } catch (error) {
                 console.error('Error loading documents:', error);
@@ -466,6 +484,9 @@
                 // Clear chat and show welcome
                 document.getElementById('chatBox').innerHTML = '';
                 addMessage('system', 'New chat session started! Upload documents and ask questions about them.');
+                
+                // Load documents for this session
+                loadDocuments();
             } catch (error) {
                 addMessage('error', `Failed to create session: ${error.message}`);
             }
@@ -479,6 +500,7 @@
             document.getElementById('startChatBtn').onclick = startChat;
             document.getElementById('chatBox').innerHTML = '';
             addMessage('system', 'Chat reset. Click "Start Chat" to begin a new conversation.');
+            loadDocuments();
         }
 
         // Send a message with SSE streaming
@@ -578,7 +600,7 @@
 
         // Initialize
         window.onload = () => {
-            addMessage('system', 'Welcome! Upload a .txt document to get started, then chat with your AI assistant.');
+            addMessage('system', 'Welcome! Click "Start Chat" to begin, then upload documents and chat with your AI assistant.');
             loadDocuments();
         };
     </script>

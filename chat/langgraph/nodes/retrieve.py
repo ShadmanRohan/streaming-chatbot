@@ -28,12 +28,13 @@ def retrieve(state: Dict[str, Any]) -> Dict[str, Any]:
         }
     
     try:
-        # Use existing search function with MMR
+        # Use existing search function with MMR and session filtering
         results = search(
             query=state['last_user_msg'],
             top_k=state.get('top_k', 3),
             use_mmr=state.get('use_mmr', True),
-            lambda_param=state.get('lambda_param', 0.5)
+            lambda_param=state.get('lambda_param', 0.5),
+            session_id=state.get('session_id')
         )
         
         # Format results
