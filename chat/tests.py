@@ -536,3 +536,115 @@ class LangGraphIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['orchestration'], 'langgraph')
         self.assertEqual(response.json()['content'], 'LangGraph response')
+
+
+class StreamingTests(TestCase):
+    """Tests for streaming functionality (Phase 6)"""
+    
+    def setUp(self):
+        """Create test session"""
+        self.session = ChatSession.objects.create(title="Streaming Test")
+    
+    @patch('chat.llm.stream_llm')
+    def test_stream_llm_function(self, mock_stream):
+        """Test that stream_llm yields deltas"""
+        from chat.llm import stream_llm
+        
+        # Mock streaming response
+        mock_stream.return_value = iter(['Hello', ' ', 'world', '!'])
+        
+        # Collect deltas
+        deltas = list(stream_llm(
+            messages=[{'role': 'user', 'content': 'test'}]
+        ))
+        
+        self.assertEqual(deltas, ['Hello', ' ', 'world', '!'])
+        mock_stream.assert_called_once()
+    
+    def test_synthesize_stream_node(self):
+        """Test synthesize_stream node yields deltas and returns state"""
+        from chat.langgraph.nodes.synthesize_stream import synthesize_stream
+        from unittest.mock import patch
+        
+        state = {
+            'session_id': str(self.session.id),
+            'last_user_msg': 'Hello',
+            'history': [],
+            'summary': None,
+            'retrieved_chunks': [],
+            'model': 'gpt-4o-mini'
+        }
+        
+        with patch('chat.langgraph.nodes.synthesize_stream.stream_llm') as mock_stream:
+            mock_stream.return_value = iter(['Hi', ' ', 'there'])
+            
+            # Consume generator
+            results = list(synthesize_stream(state))
+            
+            # Last item should be the state dict
+            final_state = results[-1]
+            self.assertIsInstance(final_state, dict)
+            self.assertEqual(final_state['draft'], 'Hi there')
+            
+            # Earlier items should be deltas
+            deltas = results[:-1]
+            self.assertEqual(deltas, ['Hi', ' ', 'there'])
+    
+    @patch('chat.langgraph.graph.run_graph_stream')
+    def test_chat_stream_endpoint(self, mock_run_graph_stream):
+        """Test SSE endpoint returns streaming response"""
+        # Mock run_graph_stream to yield deltas
+        def mock_generator(*args, **kwargs):
+            yield "Hello"
+            yield " "
+            yield "world"
+            # Last yield should be final dict
+            yield {
+                'content': 'Hello world',
+                'retrieved_chunks': [],
+                'metadata': {}
+            }
+        
+        mock_run_graph_stream.return_value = mock_generator()
+        
+        response = self.client.post('/api/chat/stream/', {
+            'session_id': str(self.session.id),
+            'message': 'Test streaming'
+        }, content_type='application/json')
+        
+        # Should return streaming response
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/event-stream')
+        
+        # Consume stream
+        content = b''.join(response.streaming_content).decode('utf-8')
+        
+        # Should contain SSE events
+        self.assertIn('data:', content)
+        self.assertIn('"type": "delta"', content)
+        self.assertIn('"type": "done"', content)
+    
+    @patch('chat.langgraph.graph.run_graph_stream')
+    def test_chat_stream_error_handling(self, mock_run_graph_stream):
+        """Test SSE endpoint handles errors gracefully"""
+        # Mock error during streaming
+        def mock_error(*args, **kwargs):
+            if False:
+                yield  # Make it a generator
+            raise Exception("LLM error")
+        
+        mock_run_graph_stream.return_value = mock_error()
+        
+        response = self.client.post('/api/chat/stream/', {
+            'session_id': str(self.session.id),
+            'message': 'Test error'
+        }, content_type='application/json')
+        
+        # Should still return 200 (error in SSE stream)
+        self.assertEqual(response.status_code, 200)
+        
+        # Consume stream
+        content = b''.join(response.streaming_content).decode('utf-8')
+        
+        # Should contain error event
+        self.assertIn('"type": "error"', content)

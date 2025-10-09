@@ -149,3 +149,52 @@ def validate_api_key() -> bool:
         logger.error(f"Error validating API key: {e}")
         return False
 
+
+def stream_llm(messages: list, model: str = "gpt-4o-mini", temperature: float = 0.7, max_tokens: int = 2000, **kwargs):
+    """
+    Call OpenAI API with streaming enabled. Yields text deltas.
+    
+    Args:
+        messages: List of message dicts with 'role' and 'content'
+        model: Model to use
+        temperature: Temperature (0.0-2.0)
+        max_tokens: Maximum tokens to generate
+        **kwargs: Additional arguments for the API call
+        
+    Yields:
+        Text deltas from the assistant
+        
+    Raises:
+        AuthenticationError: If API key is invalid
+        RateLimitError: If rate limit is exceeded
+        OpenAIError: For other OpenAI errors
+    """
+    client = get_openai_client()
+    
+    try:
+        stream = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+            **kwargs
+        )
+        
+        for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
+                
+    except AuthenticationError as e:
+        logger.error(f"OpenAI authentication failed: {e}")
+        raise
+    except RateLimitError as e:
+        logger.error(f"OpenAI rate limit exceeded: {e}")
+        raise
+    except OpenAIError as e:
+        logger.error(f"OpenAI API streaming error: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error streaming LLM: {e}")
+        raise
+

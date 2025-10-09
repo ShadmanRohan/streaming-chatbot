@@ -272,3 +272,99 @@ def retrieve_chunks(request):
     }
     
     return Response(response_data)
+
+
+@api_view(['POST'])
+def chat_stream(request):
+    """
+    Streaming chat endpoint using Server-Sent Events (SSE).
+    
+    POST /api/chat/stream/
+    {
+        "session_id": "uuid",
+        "message": "user message",
+        "model": "gpt-4o-mini"  // optional
+    }
+    
+    Returns SSE stream with events:
+    - data: {"type": "delta", "content": "text chunk"}
+    - data: {"type": "done", "message_id": "uuid", "chunks": [...]}
+    - data: {"type": "error", "error": "error message"}
+    """
+    from django.http import StreamingHttpResponse
+    from chat.langgraph.graph import run_graph_stream
+    from chat.llm import count_tokens
+    import json
+    import uuid
+    
+    # Parse request
+    session_id = request.data.get('session_id')
+    message = request.data.get('message')
+    model = request.data.get('model', 'gpt-4o-mini')
+    
+    if not session_id or not message:
+        return Response(
+            {'error': 'session_id and message are required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    def event_stream():
+        """Generate SSE events"""
+        try:
+            # Create user message
+            user_msg = ChatMessage.objects.create(
+                session_id=session_id,
+                role='user',
+                content=message,
+                token_count=count_tokens(message, model)
+            )
+            
+            # Stream response
+            accumulated = ""
+            retrieved_chunks = []
+            metadata = {}
+            
+            for item in run_graph_stream(
+                session_id=session_id,
+                user_message=message,
+                model=model
+            ):
+                if isinstance(item, str):
+                    # Delta from LLM
+                    accumulated += item
+                    yield f"data: {json.dumps({'type': 'delta', 'content': item})}\n\n"
+                else:
+                    # Final result dict
+                    accumulated = item.get('content', accumulated)
+                    retrieved_chunks = item.get('retrieved_chunks', [])
+                    metadata = item.get('metadata', {})
+            
+            # Save assistant message
+            assistant_msg = ChatMessage.objects.create(
+                session_id=session_id,
+                role='assistant',
+                content=accumulated,
+                token_count=count_tokens(accumulated, model)
+            )
+            
+            # Update session timestamp
+            session = ChatSession.objects.get(id=session_id)
+            session.save(update_fields=['updated_at'])
+            
+            # Send done event
+            yield f"data: {json.dumps({'type': 'done', 'message_id': str(assistant_msg.id), 'chunks': len(retrieved_chunks)})}\n\n"
+            
+        except ChatSession.DoesNotExist:
+            yield f"data: {json.dumps({'type': 'error', 'error': 'Session not found'})}\n\n"
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+    
+    response = StreamingHttpResponse(
+        event_stream(),
+        content_type='text/event-stream'
+    )
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'  # Disable nginx buffering
+    
+    return response

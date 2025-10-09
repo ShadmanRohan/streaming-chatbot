@@ -130,3 +130,94 @@ def run_graph(
         logger.error(f"Graph execution error: {e}")
         raise
 
+
+def run_graph_stream(session_id: str, user_message: str, model: str = "gpt-4o-mini", 
+                     top_k: int = 3, use_mmr: bool = True, lambda_param: float = 0.5):
+    """
+    Run chat graph with streaming response (manual orchestration).
+    
+    This manually orchestrates the graph nodes to support streaming,
+    since LangGraph's compiled graph doesn't stream well.
+    
+    Args:
+        session_id: UUID of the chat session
+        user_message: The user's message
+        model: LLM model to use
+        top_k: Number of chunks to retrieve
+        use_mmr: Whether to use MMR for retrieval
+        lambda_param: MMR lambda parameter
+        
+    Yields:
+        Text deltas from LLM
+        
+    Returns:
+        Final dict with content, retrieved_chunks, metadata
+    """
+    from .nodes.load_history import load_history
+    from .nodes.decide_retrieve import decide_retrieve
+    from .nodes.retrieve import retrieve
+    from .nodes.synthesize_stream import synthesize_stream
+    from .nodes.summarize import summarize
+    
+    # Initial state
+    state = {
+        'session_id': session_id,
+        'last_user_msg': user_message,
+        'model': model,
+        'history': [],
+        'summary': None,
+        'need_retrieval': True,
+        'retrieved_chunks': [],
+        'draft': '',
+        'metadata': {},
+        'error': None,
+        'top_k': top_k,
+        'use_mmr': use_mmr,
+        'lambda_param': lambda_param,
+        'temperature': 0.7,
+        'max_tokens': 2000
+    }
+    
+    try:
+        # Step 1: Load history
+        state = load_history(state)
+        if state.get('error'):
+            raise Exception(state['error'])
+        
+        # Step 2: Decide if retrieval is needed
+        state = decide_retrieve(state)
+        
+        # Step 3: Retrieve if needed
+        state = retrieve(state)
+        if state.get('error'):
+            raise Exception(state['error'])
+        
+        # Step 4: Synthesize with streaming
+        generator = synthesize_stream(state)
+        
+        # Yield deltas
+        for delta in generator:
+            if isinstance(delta, str):
+                yield delta
+            else:
+                # Last item is the final state
+                state = delta
+        
+        # Check for synthesis errors
+        if state.get('error'):
+            raise Exception(state['error'])
+        
+        # Step 5: Update summary (non-blocking, doesn't affect stream)
+        state = summarize(state)
+        
+        # Yield final result as dict
+        yield {
+            'content': state.get('draft', ''),
+            'retrieved_chunks': state.get('retrieved_chunks', []),
+            'metadata': state.get('metadata', {})
+        }
+        
+    except Exception as e:
+        logger.error(f"Streaming graph error: {e}")
+        raise
+

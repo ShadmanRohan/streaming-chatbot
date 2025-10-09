@@ -234,8 +234,11 @@ curl http://localhost:8000/api/sessions/{session-id}/
 
 ### Chat (AI Conversation)
 
-#### POST `/api/chat/send/`
+#### POST `/api/chat/send/` (Synchronous)
 Send a message and get AI response with RAG (Retrieval-Augmented Generation).
+
+#### POST `/api/chat/stream/` (Streaming - SSE)
+Send a message and receive AI response via Server-Sent Events (streaming).
 
 **Request:**
 ```bash
@@ -301,6 +304,36 @@ curl -X POST http://localhost:8000/api/chat/send/ \
 }
 ```
 
+**Streaming Example (SSE):**
+
+The `/api/chat/stream/` endpoint returns Server-Sent Events for real-time streaming:
+
+```bash
+curl -X POST http://localhost:8000/api/chat/stream/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "session-uuid",
+    "message": "Explain quantum computing",
+    "model": "gpt-4o-mini"
+  }'
+```
+
+**SSE Response Format:**
+```
+data: {"type": "delta", "content": "Quantum"}
+data: {"type": "delta", "content": " computing"}
+data: {"type": "delta", "content": " is..."}
+data: {"type": "done", "message_id": "msg-uuid", "chunks": 3}
+```
+
+Event types:
+- `delta`: Text chunk from LLM (stream these to display)
+- `done`: Streaming complete (message saved to DB)
+- `error`: Error occurred during streaming
+
+**Browser Demo:**  
+Open `static/sse-demo.html` in a browser for a live streaming chat demo.
+
 ---
 
 ## Management Commands
@@ -352,9 +385,19 @@ CHAT_TEMPERATURE=0.7
 RAG_ENABLED=true
 RAG_TOP_K=3
 RAG_USE_MMR=true
+
+# Memory Configuration (Phase 7)
+CHAT_MAX_TOKENS_CONTEXT=3000
+CHAT_HISTORY_MIN_TURNS=6
+SUMMARY_INTERVAL_TURNS=5
 ```
 
 **Important:** The chat endpoint requires a valid OpenAI API key. Get one from [OpenAI Platform](https://platform.openai.com/api-keys).
+
+**Memory Features:**
+- **Token-bounded history**: Limits conversation context by token count (default: 3000 tokens)
+- **Minimum turns**: Ensures at least N turns are kept regardless of token limit (default: 6)
+- **Auto-summarization**: Creates long-term summaries every N assistant turns (default: 5)
 
 ### Database
 
@@ -447,13 +490,27 @@ chatserver/
 │   ├── retrieval.py        # Search & MMR
 │   ├── embedding_utils.py  # Embedding generation
 │   ├── chunking.py         # Text chunking
-│   ├── tests.py            # Unit tests
+│   ├── llm.py              # OpenAI integration
+│   ├── prompts.py          # Prompt engineering
+│   ├── tests.py            # Unit tests (34 tests)
+│   ├── langgraph/          # LangGraph orchestration (Phase 5)
+│   │   ├── graph.py        # Graph definition & execution
+│   │   ├── state.py        # Shared state schema
+│   │   └── nodes/          # Individual graph nodes
+│   │       ├── load_history.py
+│   │       ├── decide_retrieve.py
+│   │       ├── retrieve.py
+│   │       ├── synthesize.py
+│   │       ├── synthesize_stream.py  # Streaming variant
+│   │       └── summarize.py
 │   └── management/
 │       └── commands/
 │           └── ingest_docs.py
 ├── chatserver/             # Project settings
 │   ├── settings.py
 │   └── urls.py
+├── static/
+│   └── sse-demo.html       # Streaming demo
 ├── requirements.txt
 ├── manage.py
 └── README.md
@@ -493,9 +550,9 @@ curl -X POST http://localhost:8000/api/retrieve/ \
 
 - [x] Phase 0-3: Project setup, models, retrieval, MMR ✅
 - [x] Phase 4: Chat endpoint with LLM integration ✅
-- [ ] Phase 5: LangGraph orchestration  
-- [ ] Phase 6: Streaming responses (SSE)
-- [ ] Phase 7: Session memory & summarization
+- [x] Phase 5: LangGraph orchestration ✅
+- [x] Phase 6: Streaming responses (SSE) ✅
+- [x] Phase 7: Session memory & summarization ✅
 - [ ] Phase 8: Rate limiting, CORS, observability
 - [ ] Phase 9: Documentation & deployment
 
