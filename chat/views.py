@@ -22,6 +22,7 @@ from .embedding_utils import embed_text
 from .retrieval import search_similar_chunks, search
 from .llm import call_llm, count_tokens
 from .prompts import build_chat_prompt
+from .langgraph import run_graph
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,7 @@ class ChatViewSet(viewsets.ViewSet):
         """
         POST /api/chat/send/
         
-        Send a message and get AI response with RAG.
+        Send a message and get AI response with LangGraph orchestration.
         """
         # 1. Validate request
         serializer = ChatRequestSerializer(data=request.data)
@@ -120,13 +121,12 @@ class ChatViewSet(viewsets.ViewSet):
         
         session_id = serializer.validated_data['session_id']
         message = serializer.validated_data['message']
-        retrieve = serializer.validated_data.get('retrieve', True)
         top_k = serializer.validated_data.get('top_k', 3)
         use_mmr = serializer.validated_data.get('use_mmr', True)
         lambda_param = serializer.validated_data.get('lambda_param', 0.5)
         model = serializer.validated_data.get('model', 'gpt-4o-mini')
         
-        # 2. Get session
+        # 2. Validate session exists
         try:
             session = ChatSession.objects.get(id=session_id)
         except ChatSession.DoesNotExist:
@@ -144,61 +144,21 @@ class ChatViewSet(viewsets.ViewSet):
                 token_count=count_tokens(message, model)
             )
             
-            # 4. Load conversation context
-            context_messages = list(
-                ChatMessage.objects.filter(session=session)
-                .order_by('-created_at')[:10]
-            )
-            context_messages.reverse()  # Chronological order
-            
-            # Exclude the just-created user message from context
-            # (it will be added separately in the prompt)
-            context_messages = context_messages[:-1] if len(context_messages) > 1 else []
-            
-            summary = session.long_term_summary
-            
-            # 5. Retrieve relevant chunks (RAG)
-            retrieved_chunks = []
-            if retrieve:
-                try:
-                    results = search(
-                        query=message,
-                        top_k=top_k,
-                        use_mmr=use_mmr,
-                        lambda_param=lambda_param
-                    )
-                    retrieved_chunks = [
-                        {
-                            'text': chunk.text,
-                            'score': float(score),
-                            'document': chunk.document.filename,
-                            'chunk_id': str(chunk.id)
-                        }
-                        for score, chunk in results
-                    ]
-                except Exception as e:
-                    logger.error(f"Retrieval error: {e}")
-                    # Continue without retrieval if it fails
-            
-            # 6. Build prompt
-            messages = build_chat_prompt(
-                user_message=message,
-                retrieved_chunks=retrieved_chunks,
-                context_messages=context_messages,
-                summary=summary
-            )
-            
-            # 7. Call LLM
+            # 4. Run LangGraph orchestration
             try:
-                llm_response = call_llm(
-                    messages=messages,
+                result = run_graph(
+                    session_id=str(session_id),
+                    user_message=message,
                     model=model,
-                    temperature=0.7,
-                    max_tokens=2000
+                    top_k=top_k,
+                    use_mmr=use_mmr,
+                    lambda_param=lambda_param
                 )
                 
-                assistant_content = llm_response['content']
-                tokens_used = llm_response['tokens_used']
+                assistant_content = result['content']
+                retrieved_chunks = result['retrieved_chunks']
+                metadata = result['metadata']
+                tokens_used = metadata.get('tokens_used', 0)
                 
             except AuthenticationError as e:
                 logger.error(f"OpenAI authentication failed: {e}")
@@ -222,21 +182,20 @@ class ChatViewSet(viewsets.ViewSet):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             except ValueError as e:
-                # Catch API key not configured error
                 logger.error(f"Configuration error: {e}")
                 return Response(
                     {'error': str(e), 'code': 'CONFIGURATION_ERROR'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             except Exception as e:
-                logger.error(f"Unexpected error: {e}")
+                logger.error(f"Graph execution error: {e}")
                 return Response(
                     {'error': 'An unexpected error occurred',
                      'code': 'INTERNAL_ERROR'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             
-            # 8. Save assistant message
+            # 5. Save assistant message
             assistant_msg = ChatMessage.objects.create(
                 session=session,
                 role='assistant',
@@ -244,22 +203,18 @@ class ChatViewSet(viewsets.ViewSet):
                 token_count=tokens_used
             )
             
-            # 9. Update session timestamp
+            # 6. Update session timestamp
             session.updated_at = timezone.now()
             session.save()
         
-        # 10. Return response
+        # 7. Return response
         response_data = {
             'session_id': str(session.id),
             'message_id': str(assistant_msg.id),
             'content': assistant_content,
             'retrieved_chunks': retrieved_chunks,
-            'metadata': {
-                'tokens_used': tokens_used,
-                'retrieval_count': len(retrieved_chunks),
-                'context_messages': len(context_messages),
-                'model': model
-            }
+            'metadata': metadata,
+            'orchestration': 'langgraph'  # Indicate using LangGraph
         }
         
         return Response(response_data, status=status.HTTP_200_OK)

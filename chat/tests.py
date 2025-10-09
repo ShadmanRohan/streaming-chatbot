@@ -212,23 +212,14 @@ class ChatEndpointTests(TestCase):
             embedding=[0.9, 0.1, 0.0]
         )
     
-    @patch('chat.views.call_llm')
-    @patch('chat.views.search')
-    def test_chat_send_success(self, mock_search, mock_llm):
+    @patch('chat.views.run_graph')
+    def test_chat_send_success(self, mock_graph):
         """Test successful chat message"""
-        # Mock retrieval
-        mock_chunk = MagicMock()
-        mock_chunk.text = "ML is great"
-        mock_chunk.id = "chunk-123"
-        mock_chunk.document.filename = "test.txt"
-        mock_search.return_value = [(0.9, mock_chunk)]
-        
-        # Mock LLM response
-        mock_llm.return_value = {
+        # Mock LangGraph response
+        mock_graph.return_value = {
             'content': "Machine learning is a subset of AI...",
-            'tokens_used': 100,
-            'model': 'gpt-4o-mini',
-            'finish_reason': 'stop'
+            'retrieved_chunks': [{'text': 'ML is great', 'score': 0.9}],
+            'metadata': {'tokens_used': 100, 'retrieval_count': 1}
         }
         
         # Make request
@@ -241,6 +232,7 @@ class ChatEndpointTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['session_id'], str(self.session.id))
         self.assertIn('content', response.json())
+        self.assertEqual(response.json()['orchestration'], 'langgraph')
         self.assertEqual(ChatMessage.objects.filter(session=self.session).count(), 2)  # user + assistant
     
     def test_chat_session_not_found(self):
@@ -262,14 +254,13 @@ class ChatEndpointTests(TestCase):
         
         self.assertEqual(response.status_code, 400)
     
-    @patch('chat.views.call_llm')
-    def test_chat_without_retrieval(self, mock_llm):
+    @patch('chat.views.run_graph')
+    def test_chat_without_retrieval(self, mock_graph):
         """Test chat without RAG retrieval"""
-        mock_llm.return_value = {
+        mock_graph.return_value = {
             'content': "Response without retrieval",
-            'tokens_used': 50,
-            'model': 'gpt-4o-mini',
-            'finish_reason': 'stop'
+            'retrieved_chunks': [],
+            'metadata': {'tokens_used': 50, 'retrieval_count': 0}
         }
         
         response = self.client.post('/api/chat/send/', {
@@ -350,3 +341,198 @@ class PromptTests(TestCase):
         
         # Should have system + context (2 msgs) + current user message
         self.assertGreaterEqual(len(messages), 4)
+
+
+class LangGraphNodeTests(TestCase):
+    """Tests for LangGraph nodes"""
+    
+    def setUp(self):
+        """Create test data"""
+        self.session = ChatSession.objects.create(title="LangGraph Test")
+        ChatMessage.objects.create(
+            session=self.session,
+            role='user',
+            content='Hello'
+        )
+        ChatMessage.objects.create(
+            session=self.session,
+            role='assistant',
+            content='Hi there'
+        )
+    
+    def test_load_history_node(self):
+        """Test load_history node"""
+        from chat.langgraph.nodes import load_history
+        
+        state = {
+            'session_id': str(self.session.id),
+            'last_user_msg': 'Test',
+            'history': [],
+            'summary': None
+        }
+        
+        result = load_history(state)
+        
+        self.assertEqual(len(result['history']), 2)
+        self.assertEqual(result['history'][0]['role'], 'user')
+        self.assertEqual(result['history'][1]['role'], 'assistant')
+        self.assertIsNone(result['error'])
+    
+    def test_decide_retrieve_with_question(self):
+        """Test decide_retrieve node with question"""
+        from chat.langgraph.nodes import decide_retrieve
+        
+        state = {
+            'last_user_msg': 'What is machine learning?',
+            'need_retrieval': False
+        }
+        
+        result = decide_retrieve(state)
+        
+        self.assertTrue(result['need_retrieval'])
+    
+    def test_decide_retrieve_simple_greeting(self):
+        """Test decide_retrieve node with greeting"""
+        from chat.langgraph.nodes import decide_retrieve
+        
+        state = {
+            'last_user_msg': 'hi',
+            'need_retrieval': True
+        }
+        
+        result = decide_retrieve(state)
+        
+        self.assertFalse(result['need_retrieval'])
+    
+    def test_retrieve_node_when_needed(self):
+        """Test retrieve node when retrieval is needed"""
+        from chat.langgraph.nodes import retrieve
+        
+        # Create real document and chunk for retrieval
+        doc = Document.objects.create(filename="test.txt", raw_text="ML is great")
+        chunk = DocumentChunk.objects.create(
+            document=doc,
+            chunk_index=0,
+            text="ML is great",
+            embedding=[0.9, 0.1] * 192  # 384 dims
+        )
+        
+        state = {
+            'last_user_msg': 'What is ML?',
+            'need_retrieval': True,
+            'retrieved_chunks': [],
+            'top_k': 3,
+            'use_mmr': True,
+            'lambda_param': 0.5
+        }
+        
+        with patch('chat.embedding_utils.embed_text') as mock_embed:
+            mock_embed.return_value = [0.9, 0.1] * 192
+            result = retrieve(state)
+        
+        self.assertGreater(len(result['retrieved_chunks']), 0)
+        self.assertIn('text', result['retrieved_chunks'][0])
+    
+    def test_retrieve_node_when_not_needed(self):
+        """Test retrieve node when retrieval is skipped"""
+        from chat.langgraph.nodes import retrieve
+        
+        state = {
+            'need_retrieval': False,
+            'retrieved_chunks': []
+        }
+        
+        result = retrieve(state)
+        
+        self.assertEqual(len(result['retrieved_chunks']), 0)
+    
+    def test_synthesize_node(self):
+        """Test synthesize node"""
+        from chat.langgraph.nodes import synthesize
+        import chat.llm as llm_module
+        
+        state = {
+            'last_user_msg': 'Test question',
+            'history': [{'role': 'user', 'content': 'Hi'}],
+            'summary': None,
+            'retrieved_chunks': [],
+            'draft': '',
+            'metadata': {},
+            'model': 'gpt-4o-mini'
+        }
+        
+        # Patch the llm module's call_llm
+        with patch.object(llm_module, 'call_llm') as mock_llm:
+            mock_llm.return_value = {
+                'content': 'This is the LLM response',
+                'tokens_used': 100,
+                'model': 'gpt-4o-mini',
+                'finish_reason': 'stop'
+            }
+            
+            result = synthesize(state)
+        
+        self.assertEqual(result['draft'], 'This is the LLM response')
+        self.assertEqual(result['metadata']['tokens_used'], 100)
+        self.assertIsNone(result['error'])
+
+
+class LangGraphIntegrationTests(TestCase):
+    """Integration tests for LangGraph orchestration"""
+    
+    def setUp(self):
+        """Create test data"""
+        self.session = ChatSession.objects.create(title="Integration Test")
+        self.doc = Document.objects.create(
+            filename="test.txt",
+            raw_text="Machine learning is awesome"
+        )
+        DocumentChunk.objects.create(
+            document=self.doc,
+            chunk_index=0,
+            text="ML is great",
+            embedding=[0.9, 0.1, 0.0] * 128  # 384 dims
+        )
+    
+    def test_full_graph_execution(self):
+        """Test full graph execution end-to-end"""
+        from chat.langgraph import run_graph
+        import chat.llm as llm_module
+        
+        # Patch the llm module's call_llm
+        with patch.object(llm_module, 'call_llm') as mock_llm:
+            mock_llm.return_value = {
+                'content': 'Machine learning is a subset of AI...',
+                'tokens_used': 50,
+                'model': 'gpt-4o-mini',
+                'finish_reason': 'stop'
+            }
+            
+            result = run_graph(
+                session_id=str(self.session.id),
+                user_message='What is ML?',
+                model='gpt-4o-mini'
+            )
+        
+        self.assertIn('content', result)
+        self.assertIn('retrieved_chunks', result)
+        self.assertIn('metadata', result)
+        self.assertEqual(result['content'], 'Machine learning is a subset of AI...')
+    
+    @patch('chat.views.run_graph')
+    def test_chat_endpoint_with_langgraph(self, mock_graph):
+        """Test chat endpoint using LangGraph"""
+        mock_graph.return_value = {
+            'content': 'LangGraph response',
+            'retrieved_chunks': [],
+            'metadata': {'tokens_used': 75, 'retrieval_count': 0}
+        }
+        
+        response = self.client.post('/api/chat/send/', {
+            'session_id': str(self.session.id),
+            'message': 'Hello'
+        }, content_type='application/json')
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['orchestration'], 'langgraph')
+        self.assertEqual(response.json()['content'], 'LangGraph response')
