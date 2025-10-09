@@ -105,10 +105,14 @@
             border-bottom: 1px solid #ffeeba;
             font-size: 13px;
         }
-        .info input {
-            width: 300px;
+        .info span {
             margin-left: 10px;
-            padding: 6px;
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+            font-size: 12px;
         }
     </style>
 </head>
@@ -120,9 +124,9 @@
         </div>
         
         <div class="info">
-            <strong>Session ID:</strong>
-            <input type="text" id="sessionId" placeholder="Enter session UUID or leave blank to create new">
-            <button onclick="createSession()" style="padding: 6px 12px; margin-left: 10px; font-size: 12px;">New Session</button>
+            <strong>Session:</strong>
+            <span id="sessionIdLabel">No active session</span>
+            <button onclick="startChat()" id="startChatBtn" style="padding: 6px 12px; margin-left: 10px; font-size: 12px;">Start Chat</button>
         </div>
         
         <div class="chat-box" id="chatBox"></div>
@@ -141,9 +145,10 @@
     <script>
         const API_BASE = 'http://localhost:8000/api';
         let currentEventSource = null;
+        let currentSessionId = null;
 
-        // Create a new session
-        async function createSession() {
+        // Start a new chat session
+        async function startChat() {
             try {
                 const response = await fetch(`${API_BASE}/sessions/`, {
                     method: 'POST',
@@ -151,22 +156,39 @@
                     body: JSON.stringify({ title: 'SSE Demo Session' })
                 });
                 const data = await response.json();
-                document.getElementById('sessionId').value = data.id;
-                addMessage('system', `New session created: ${data.id}`);
+                currentSessionId = data.id;
+                
+                // Update UI
+                document.getElementById('sessionIdLabel').textContent = data.id;
+                document.getElementById('startChatBtn').textContent = 'Reset Chat';
+                document.getElementById('startChatBtn').onclick = resetChat;
+                
+                // Clear chat and show welcome
+                document.getElementById('chatBox').innerHTML = '';
+                addMessage('system', 'New chat session started! Ask me anything.');
             } catch (error) {
                 addMessage('error', `Failed to create session: ${error.message}`);
             }
         }
 
+        // Reset the chat session
+        function resetChat() {
+            currentSessionId = null;
+            document.getElementById('sessionIdLabel').textContent = 'No active session';
+            document.getElementById('startChatBtn').textContent = 'Start Chat';
+            document.getElementById('startChatBtn').onclick = startChat;
+            document.getElementById('chatBox').innerHTML = '';
+            addMessage('system', 'Chat reset. Click "Start Chat" to begin a new conversation.');
+        }
+
         // Send a message with SSE streaming
         async function sendMessage() {
             const input = document.getElementById('messageInput');
-            const sessionId = document.getElementById('sessionId').value.trim();
             const message = input.value.trim();
 
             if (!message) return;
-            if (!sessionId) {
-                addMessage('error', 'Please enter a session ID or create a new session');
+            if (!currentSessionId) {
+                addMessage('error', 'Please start a chat session first');
                 return;
             }
 
@@ -193,7 +215,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        session_id: sessionId,
+                        session_id: currentSessionId,
                         message: message
                     })
                 });
@@ -256,7 +278,7 @@
 
         // Initialize
         window.onload = () => {
-            addMessage('system', 'Welcome! Create a session or enter an existing session ID to start chatting.');
+            addMessage('system', 'Welcome! Click "Start Chat" to begin a new conversation.');
         };
     </script>
 </body>
