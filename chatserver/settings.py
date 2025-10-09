@@ -32,14 +32,18 @@ TEMPLATES = [{
     ]}}
 ]
 WSGI_APPLICATION = "chatserver.wsgi.application"
-if os.environ.get("DB_NAME"):
-    DATABASES = {"default":{
-        "ENGINE":"django.db.backends.postgresql",
-        "NAME":os.environ["DB_NAME"],"USER":os.environ.get("DB_USER",""),
-        "PASSWORD":os.environ.get("DB_PASSWORD",""),"HOST":os.environ.get("DB_HOST","localhost"),
-        "PORT":os.environ.get("DB_PORT","5432"),"CONN_MAX_AGE":60}}
-else:
-    DATABASES = {"default":{"ENGINE":"django.db.backends.sqlite3","NAME": BASE_DIR / "db.sqlite3"}}
+# PostgreSQL Configuration
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "qtec_chatbot",
+        "USER": "qtec_user",
+        "PASSWORD": "qtec_password",
+        "HOST": "localhost",
+        "PORT": "5433",
+        "CONN_MAX_AGE": 60,
+    }
+}
 LANGUAGE_CODE = "en-us"; TIME_ZONE = "UTC"; USE_I18N = True; USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
