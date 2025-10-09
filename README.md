@@ -1,6 +1,6 @@
 # ChatServer — RAG-Powered Chatbot Backend
 
-Django 5 backend with document ingestion, semantic search (with MMR), and chat capabilities.
+Django 5 backend with document ingestion, semantic search (with MMR), LangGraph orchestration, and streaming chat capabilities.
 
 ## Features
 
@@ -8,13 +8,34 @@ Django 5 backend with document ingestion, semantic search (with MMR), and chat c
 - 🔍 **Semantic Search**: SBERT embeddings with cosine similarity
 - 🎯 **MMR (Maximal Marginal Relevance)**: Diverse, relevant retrieval results
 - 💬 **Chat Sessions**: Conversation management with message history
-- 🧪 **Comprehensive Tests**: Unit tests for all retrieval functions
+- 🧠 **Advanced Memory**: Token-bounded history + rolling summaries
+- 🔄 **LangGraph Orchestration**: Multi-node workflow for RAG and chat
+- ⚡ **Real-time Streaming**: Server-Sent Events (SSE) for token-by-token responses
+- 🗄️ **PostgreSQL Database**: Production-ready database for persistence
+- 🧪 **Comprehensive Tests**: 34 unit and integration tests
 
 ---
 
 ## Quick Start
 
-### 1. Installation
+### 1. Prerequisites
+
+**PostgreSQL Database:**
+```bash
+# Option 1: Using Docker (recommended for development)
+docker run -d \
+  --name qtec-postgres \
+  -e POSTGRES_DB=qtec_chatbot \
+  -e POSTGRES_USER=qtec_user \
+  -e POSTGRES_PASSWORD=qtec_password \
+  -p 5433:5432 \
+  postgres:15
+
+# Option 2: Install PostgreSQL locally
+# Follow instructions at https://www.postgresql.org/download/
+```
+
+### 2. Installation
 
 ```bash
 # Install dependencies
@@ -24,6 +45,10 @@ pip install -r requirements.txt
 conda activate legal_assistant
 pip install -r requirements.txt
 
+# Configure environment variables
+# Create .env file with your OpenAI API key
+echo "OPENAI_API_KEY=your_key_here" > .env
+
 # Run migrations
 python manage.py migrate
 
@@ -31,13 +56,13 @@ python manage.py migrate
 python manage.py createsuperuser
 ```
 
-### 2. Run Server
+### 3. Run Server
 
 ```bash
 python manage.py runserver
 ```
 
-### 3. Health Check
+### 4. Health Check
 
 ```bash
 curl http://localhost:8000/health/
@@ -401,14 +426,35 @@ SUMMARY_INTERVAL_TURNS=5
 
 ### Database
 
-**SQLite (default):**
-- Auto-configured, works out of the box
-- Uses `db.sqlite3` file
+**PostgreSQL (Production):**
+- **Database**: `qtec_chatbot`
+- **User**: `qtec_user`
+- **Port**: `5433` (Docker) or `5432` (local)
+- **Connection pooling**: Enabled with `CONN_MAX_AGE=60`
+- **Driver**: `psycopg2-binary` (included in requirements)
 
-**PostgreSQL (optional):**
-- Set `DB_NAME` env var to enable
-- Requires `psycopg2-binary` (already in requirements)
-- For pgvector support, install extension in Postgres
+**Configuration** (`chatserver/settings.py`):
+```python
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "qtec_chatbot",
+        "USER": "qtec_user",
+        "PASSWORD": "qtec_password",
+        "HOST": "localhost",
+        "PORT": "5433",
+        "CONN_MAX_AGE": 60,
+    }
+}
+```
+
+**Benefits:**
+- ✅ Better concurrent connections
+- ✅ Robust data integrity with ACID compliance
+- ✅ Superior performance for complex queries
+- ✅ Production-ready with connection pooling
+- ✅ JSON field support for future enhancements
+- ✅ Optional pgvector extension for native vector operations
 
 ---
 
@@ -442,29 +488,126 @@ python manage.py test chat.tests.ChunkingTests
 
 ## Architecture
 
-### Components
+### System Design Overview
 
-1. **Document Management** (`chat/models.py`)
-   - `Document`: Raw text storage
-   - `DocumentChunk`: Text chunks with embeddings
+The chatbot follows a **modular, orchestrated architecture** using LangGraph to coordinate multiple specialized nodes in a workflow. This design ensures clean separation of concerns, testability, and extensibility.
 
-2. **Chunking** (`chat/chunking.py`)
-   - Semantic paragraph-based splitting
-   - Configurable max length
+### Core Components
 
-3. **Embeddings** (`chat/embedding_utils.py`)
-   - SBERT model: `all-MiniLM-L6-v2`
-   - 384-dimensional vectors
-   - Cosine similarity
+#### 1. **Document Management** (`chat/models.py`)
+- **`Document`**: Stores raw text with metadata
+- **`DocumentChunk`**: Text chunks with 384-dim SBERT embeddings
+- **Chunking Strategy**: Semantic paragraph-based splitting (500 chars max)
+- **Storage**: PostgreSQL with indexed foreign keys
 
-4. **Retrieval** (`chat/retrieval.py`)
-   - Basic similarity search
-   - MMR for diversity
-   - Document filtering
+#### 2. **Embeddings & Retrieval** (`chat/embedding_utils.py`, `chat/retrieval.py`)
+- **Model**: `all-MiniLM-L6-v2` (SBERT)
+- **Dimensions**: 384-dimensional vectors
+- **Similarity**: Cosine similarity
+- **MMR Algorithm**: Maximal Marginal Relevance for diverse results
+- **Configurable**: `top_k`, `lambda_param` (relevance vs diversity)
 
-5. **Chat** (`chat/models.py`)
-   - `ChatSession`: Conversation container
-   - `ChatMessage`: User/assistant messages
+#### 3. **Chat Memory Design** (`chat/langgraph/nodes/load_history.py`, `chat/models.py`)
+
+**Two-tier memory system** for efficient context management:
+
+**Short-term Memory (Token-bounded History):**
+- Loads recent messages from `ChatMessage` table
+- **Token Budget**: 3000 tokens (configurable via `CHAT_MAX_TOKENS_CONTEXT`)
+- **Minimum Turns**: 6 turns preserved regardless of token count
+- **Trimming Strategy**: Oldest-first removal while respecting minimum turns
+- **Token Estimation**: Uses `tiktoken` for accurate OpenAI token counting
+- **Purpose**: Maintains immediate conversational context
+
+**Long-term Memory (Rolling Session Summary):**
+- Stored in `ChatSession.long_term_summary` field
+- **Update Frequency**: Every 5 assistant turns (configurable via `SUMMARY_INTERVAL_TURNS`)
+- **Summary Generation**: LLM-powered abstractive summarization (300-600 tokens)
+- **Prompt Injection**: Included at the top of every chat prompt
+- **Purpose**: Preserves conversation essence while keeping prompts compact
+
+**Memory Configuration** (`chatserver/settings.py`):
+```python
+MEMORY_CONFIG = {
+    "max_tokens_context": 3000,      # Token budget for history
+    "min_history_turns": 6,          # Minimum turns to preserve
+    "summary_interval_turns": 5,     # Summarize every N turns
+}
+```
+
+**Benefits:**
+- ✅ Prevents context window overflow
+- ✅ Maintains conversation coherence across long sessions
+- ✅ Balances recency (short-term) with continuity (long-term)
+- ✅ Configurable for different use cases
+
+#### 4. **LangGraph Orchestration** (`chat/langgraph/`)
+
+**Graph Nodes:**
+1. **`load_history`**: Loads and trims conversation history
+2. **`decide_retrieve`**: Heuristic to determine if RAG is needed
+3. **`retrieve`**: Performs semantic search with MMR
+4. **`synthesize`**: Generates LLM response (synchronous)
+5. **`synthesize_stream`**: Generates LLM response (streaming)
+6. **`summarize`**: Updates long-term session summary
+
+**Workflow:**
+```
+load_history → decide_retrieve → [retrieve?] → synthesize → summarize
+```
+
+**Conditional Logic:**
+- RAG retrieval only triggered for questions, long messages, or explicit requests
+- Summarization only runs every N assistant turns
+
+#### 5. **LLM Integration** (`chat/llm.py`)
+- **Provider**: OpenAI API
+- **Models**: `gpt-4o-mini` (default), configurable
+- **Features**: Synchronous and streaming responses
+- **Error Handling**: Authentication, rate limits, general errors
+- **Token Counting**: `tiktoken` for accurate estimation
+- **Security**: API key loaded from environment variables
+
+#### 6. **Streaming (SSE)** (`chat/views.py`, `chat/langgraph/graph.py`)
+- **Protocol**: Server-Sent Events (SSE)
+- **Events**: `token` (deltas), `done` (completion), `error` (failures)
+- **Persistence**: Full text saved on completion, partial on disconnect
+- **Keep-alive**: Heartbeat for long-running connections
+- **Manual Orchestration**: `run_graph_stream` bypasses compiled graph for streaming
+
+### Design Rationale
+
+#### Why LangGraph?
+- **Explicit Control Flow**: Clear, debuggable orchestration vs black-box chains
+- **Conditional Logic**: Dynamic RAG based on message content
+- **State Management**: Shared state across nodes with type safety
+- **Testability**: Each node is independently testable
+- **Extensibility**: Easy to add new nodes (e.g., fact-checking, citations)
+
+#### Why Two-tier Memory?
+- **Context Window Limits**: LLMs have token limits (8K-128K)
+- **Cost Optimization**: Fewer tokens = lower API costs
+- **Performance**: Smaller prompts = faster responses
+- **Coherence**: Summaries preserve long-term context without verbatim history
+
+#### Why MMR (Maximal Marginal Relevance)?
+- **Diversity**: Prevents redundant chunks from dominating results
+- **Coverage**: Ensures broader information retrieval
+- **Configurable**: `lambda_param` balances relevance vs diversity
+- **Better RAG**: More diverse context = better LLM responses
+
+#### Why PostgreSQL over SQLite?
+- **Concurrency**: Handles multiple simultaneous connections
+- **Integrity**: ACID compliance for data consistency
+- **Performance**: Better query optimization and indexing
+- **Production-ready**: Industry standard for web applications
+- **Scalability**: Supports future growth (pgvector for native embeddings)
+
+#### Why Server-Sent Events (SSE)?
+- **Simplicity**: Easier than WebSockets for one-way streaming
+- **HTTP-based**: Works with standard proxies and load balancers
+- **Auto-reconnect**: Built-in browser reconnection
+- **Progressive Enhancement**: Graceful fallback to synchronous API
 
 ---
 
@@ -472,8 +615,14 @@ python manage.py test chat.tests.ChunkingTests
 
 - **Framework**: Django 5.0.6
 - **API**: Django REST Framework 3.15
-- **Embeddings**: sentence-transformers (SBERT)
-- **Database**: SQLite (default) / PostgreSQL (optional)
+- **Database**: PostgreSQL 15 (with connection pooling)
+- **Orchestration**: LangGraph (LangChain ecosystem)
+- **LLM Provider**: OpenAI API (gpt-4o-mini)
+- **Embeddings**: sentence-transformers (SBERT, all-MiniLM-L6-v2)
+- **Token Counting**: tiktoken
+- **Streaming**: Server-Sent Events (SSE)
+- **CORS**: django-cors-headers
+- **Environment**: python-dotenv
 - **Python**: 3.10+
 
 ---
@@ -518,6 +667,33 @@ chatserver/
 
 ---
 
+## Interactive Demo
+
+### Streaming Chat UI
+
+Access the interactive demo at: **http://localhost:8000/demo/**
+
+**Features:**
+- 🎯 **Session Management**: Start new chat sessions with one click
+- ⚡ **Real-time Streaming**: See AI responses token-by-token
+- 💬 **Chat History**: View full conversation in the UI
+- 🔄 **Auto-reconnect**: Handles connection drops gracefully
+- 🎨 **Modern UI**: Clean, responsive design
+
+**Usage:**
+1. Click "Start Chat" to create a new session
+2. Type your message and click "Send"
+3. Watch the AI response stream in real-time
+4. Click "Reset Chat" to start a new conversation
+
+**Technical Details:**
+- Uses `EventSource` API for SSE
+- Handles `token`, `done`, and `error` events
+- Displays session ID for debugging
+- Auto-scrolls to latest messages
+
+---
+
 ## Development
 
 ### Add New Document
@@ -546,15 +722,53 @@ curl -X POST http://localhost:8000/api/retrieve/ \
 
 ---
 
-## Next Steps (Roadmap)
+## Project Roadmap
 
-- [x] Phase 0-3: Project setup, models, retrieval, MMR ✅
-- [x] Phase 4: Chat endpoint with LLM integration ✅
-- [x] Phase 5: LangGraph orchestration ✅
-- [x] Phase 6: Streaming responses (SSE) ✅
-- [x] Phase 7: Session memory & summarization ✅
-- [ ] Phase 8: Rate limiting, CORS, observability
-- [ ] Phase 9: Documentation & deployment
+### ✅ Completed Phases
+
+- **Phase 0-1**: Project setup, Django configuration, PostgreSQL integration
+- **Phase 2**: Models (Document, DocumentChunk, ChatSession, ChatMessage)
+- **Phase 3**: Document chunking, SBERT embeddings, semantic search
+- **Phase 3.5**: MMR (Maximal Marginal Relevance) for diverse retrieval
+- **Phase 4**: Chat endpoint with OpenAI LLM integration
+- **Phase 5**: LangGraph orchestration (6 nodes, conditional workflow)
+- **Phase 6**: Streaming responses with Server-Sent Events (SSE)
+- **Phase 7**: Two-tier memory (token-bounded history + rolling summaries)
+- **Phase 8**: CORS configuration, environment variables, security
+- **Phase 9**: Comprehensive testing (34 tests), documentation, demo UI
+
+### 🚀 Future Enhancements
+
+**Performance & Scalability:**
+- [ ] Redis caching for embeddings and LLM responses
+- [ ] Celery for async document processing
+- [ ] pgvector extension for native vector operations
+- [ ] Query result caching with TTL
+
+**Features:**
+- [ ] Multi-document chat (filter by document IDs)
+- [ ] Citation tracking (which chunks influenced response)
+- [ ] Conversation export (JSON, PDF)
+- [ ] User authentication & authorization
+- [ ] Multi-user support with permissions
+
+**Observability:**
+- [ ] Prometheus metrics (latency, token usage, error rates)
+- [ ] Structured logging with correlation IDs
+- [ ] OpenTelemetry tracing for LangGraph nodes
+- [ ] Cost tracking dashboard (OpenAI API usage)
+
+**Advanced RAG:**
+- [ ] Hybrid search (semantic + keyword BM25)
+- [ ] Re-ranking with cross-encoder models
+- [ ] Query expansion and reformulation
+- [ ] Multi-hop reasoning for complex queries
+
+**Production:**
+- [ ] Docker Compose for local development
+- [ ] Kubernetes deployment manifests
+- [ ] CI/CD pipeline (GitHub Actions)
+- [ ] Load testing and benchmarks
 
 ---
 
