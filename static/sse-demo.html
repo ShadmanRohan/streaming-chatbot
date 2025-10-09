@@ -34,11 +34,39 @@
             font-size: 14px;
         }
         
+        /* Instructions */
+        .instructions {
+            padding: 20px;
+            background: #fff3cd;
+            border-bottom: 2px solid #ffeeba;
+        }
+        .instructions h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #856404;
+        }
+        .instructions ol {
+            margin-left: 20px;
+            color: #856404;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+        .instructions strong {
+            color: #664d03;
+        }
+        
         /* Document Upload Section */
         .upload-section {
             padding: 20px;
             background: #f8f9fa;
             border-bottom: 2px solid #e9ecef;
+        }
+        .upload-section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #495057;
         }
         .upload-area {
             display: flex;
@@ -90,6 +118,9 @@
             background: #ccc;
             cursor: not-allowed;
         }
+        .upload-btn.processing {
+            background: #ff9800;
+        }
         .upload-status {
             width: 100%;
             margin-top: 10px;
@@ -114,57 +145,93 @@
             display: block;
         }
         
-        /* Documents List */
-        .documents-section {
+        /* Current Document Display */
+        .current-document {
             padding: 15px 20px;
             background: #fff;
-            border-bottom: 1px solid #e9ecef;
-            max-height: 150px;
-            overflow-y: auto;
+            border-bottom: 2px solid #e9ecef;
         }
-        .documents-section h3 {
+        .current-document h3 {
             font-size: 14px;
             color: #6c757d;
             margin-bottom: 10px;
         }
-        .document-item {
+        .document-info {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 12px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            margin-bottom: 6px;
-            font-size: 13px;
+            padding: 12px 15px;
+            background: #e3f2fd;
+            border-radius: 6px;
+            border: 2px solid #667eea;
         }
-        .document-item span {
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .document-item .chunk-count {
-            color: #667eea;
+        .document-info .doc-name {
             font-weight: 600;
-            margin-left: 10px;
+            color: #1976d2;
+            flex: 1;
         }
-        .no-documents {
+        .document-info .doc-stats {
+            color: #667eea;
+            font-size: 13px;
+            margin-left: 15px;
+        }
+        .no-document {
             color: #6c757d;
             font-style: italic;
             font-size: 13px;
+            padding: 10px 0;
+        }
+        
+        /* Start Chat Section */
+        .start-chat-section {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+            text-align: center;
+        }
+        .start-chat-btn {
+            padding: 15px 40px;
+            font-size: 16px;
+            font-weight: 600;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .start-chat-btn:hover:not(:disabled) {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        .start-chat-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .start-chat-btn.active {
+            background: #dc3545;
+        }
+        .start-chat-btn.active:hover {
+            background: #c82333;
         }
         
         /* Session Info */
-        .info {
+        .session-info {
             padding: 10px 20px;
             background: #fff3cd;
             border-bottom: 1px solid #ffeeba;
             font-size: 13px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+            text-align: center;
+            display: none;
         }
-        .info span {
+        .session-info.active {
+            display: block;
+        }
+        .session-info span {
             font-family: monospace;
             background: #f8f9fa;
             padding: 6px 10px;
@@ -172,12 +239,14 @@
             border: 1px solid #e9ecef;
             font-size: 12px;
         }
-        .btn-small {
-            padding: 6px 12px !important;
-            font-size: 12px !important;
-        }
         
         /* Chat Area */
+        .chat-container {
+            display: none;
+        }
+        .chat-container.active {
+            display: block;
+        }
         .chat-box {
             height: 400px;
             overflow-y: auto;
@@ -232,31 +301,32 @@
             display: flex;
             gap: 10px;
         }
-        input[type="text"], button {
+        input[type="text"] {
+            flex: 1;
             padding: 12px;
             border: 1px solid #ddd;
             border-radius: 6px;
             font-size: 14px;
-        }
-        input[type="text"] {
-            flex: 1;
             outline: none;
         }
         input[type="text"]:focus {
             border-color: #667eea;
         }
-        button {
+        .send-btn {
+            padding: 12px 24px;
             background: #667eea;
             color: white;
             border: none;
+            border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
+            font-size: 14px;
             transition: background 0.2s;
         }
-        button:hover:not(:disabled) {
+        .send-btn:hover:not(:disabled) {
             background: #5568d3;
         }
-        button:disabled {
+        .send-btn:disabled {
             background: #ccc;
             cursor: not-allowed;
         }
@@ -266,11 +336,23 @@
     <div class="container">
         <div class="header">
             <h1>🤖 ChatServer - RAG-Powered Chatbot</h1>
-            <p>Upload documents and chat with AI using your knowledge base</p>
+            <p>Upload a document and chat with AI using your knowledge base</p>
+        </div>
+        
+        <!-- Instructions -->
+        <div class="instructions">
+            <h3>📋 How to Use:</h3>
+            <ol>
+                <li><strong>Step 1:</strong> Choose a .txt file (max 500KB) and click "Upload & Process"</li>
+                <li><strong>Step 2:</strong> Wait for the file to be chunked and embedded (you'll see a success message)</li>
+                <li><strong>Step 3:</strong> Click the <strong style="color: #28a745;">"Start Chat"</strong> button (it will turn green when ready)</li>
+                <li><strong>Step 4:</strong> Ask questions about your document!</li>
+            </ol>
         </div>
         
         <!-- Document Upload Section -->
         <div class="upload-section">
+            <h2>📤 Step 1 & 2: Upload Your Document</h2>
             <div class="upload-area">
                 <div class="file-input-wrapper">
                     <input type="file" id="fileInput" accept=".txt" />
@@ -283,43 +365,47 @@
             <div id="uploadStatus" class="upload-status"></div>
         </div>
         
-        <!-- Documents List -->
-        <div class="documents-section">
-            <h3>📚 Uploaded Documents</h3>
-            <div id="documentsList">
-                <div class="no-documents">No documents uploaded yet</div>
+        <!-- Current Document Display -->
+        <div class="current-document">
+            <h3>📄 Current Document:</h3>
+            <div id="currentDocDisplay">
+                <div class="no-document">No document uploaded yet. Please upload a .txt file above.</div>
             </div>
         </div>
         
-        <!-- Session Info -->
-        <div class="info">
-            <div>
-                <strong>Session:</strong>
-                <span id="sessionIdLabel">No active session</span>
-            </div>
-            <button onclick="startChat()" id="startChatBtn" class="btn-small">Start Chat</button>
+        <!-- Start Chat Section -->
+        <div class="start-chat-section">
+            <button onclick="handleStartChat()" id="startChatBtn" class="start-chat-btn" disabled>
+                ⏳ Waiting for document...
+            </button>
         </div>
         
-        <!-- Chat Box -->
-        <div class="chat-box" id="chatBox"></div>
+        <!-- Session Info (hidden until session starts) -->
+        <div class="session-info" id="sessionInfo">
+            <strong>Session ID:</strong> <span id="sessionIdLabel"></span>
+        </div>
         
-        <!-- Input Area -->
-        <div class="input-area">
-            <input 
-                type="text" 
-                id="messageInput" 
-                placeholder="Type your message..." 
-                onkeypress="if(event.key==='Enter') sendMessage()"
-            >
-            <button onclick="sendMessage()" id="sendBtn">Send</button>
+        <!-- Chat Container (hidden until session starts) -->
+        <div class="chat-container" id="chatContainer">
+            <div class="chat-box" id="chatBox"></div>
+            <div class="input-area">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    placeholder="Type your message..." 
+                    onkeypress="if(event.key==='Enter') sendMessage()"
+                >
+                <button onclick="sendMessage()" id="sendBtn" class="send-btn">Send</button>
+            </div>
         </div>
     </div>
 
     <script>
-        // API endpoint - points to your remote server
+        // API endpoint - points to remote server (change to http://localhost:8000/api for local testing)
         const API_BASE = 'http://localhost:8000/api';
         let currentSessionId = null;
         let currentFile = null;
+        let currentDocumentData = null;
         const MAX_FILE_SIZE = 500 * 1024; // 500KB in bytes
 
         // File input handling
@@ -354,7 +440,7 @@
             // Validate file size
             if (file.size > MAX_FILE_SIZE) {
                 statusDiv.className = 'upload-status error';
-                statusDiv.textContent = `❌ Error: File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds 5MB limit`;
+                statusDiv.textContent = `❌ Error: File size (${(file.size / 1024).toFixed(1)}KB) exceeds 500KB limit`;
                 currentFile = null;
                 uploadBtn.disabled = true;
                 label.classList.remove('has-file');
@@ -376,18 +462,38 @@
             const statusDiv = document.getElementById('uploadStatus');
             const fileInput = document.getElementById('fileInput');
             const label = document.getElementById('fileLabel');
+            const startChatBtn = document.getElementById('startChatBtn');
             
             uploadBtn.disabled = true;
+            uploadBtn.textContent = '⏳ Processing...';
+            uploadBtn.classList.add('processing');
             statusDiv.className = 'upload-status info';
-            statusDiv.textContent = '⏳ Uploading and processing document...';
+            statusDiv.textContent = '⏳ Uploading and processing document (chunking & embedding)...';
             
             try {
+                // Create session FIRST if it doesn't exist
+                if (!currentSessionId) {
+                    const sessionResp = await fetch(`${API_BASE}/sessions/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: 'RAG Demo Session' })
+                    });
+                    
+                    if (!sessionResp.ok) {
+                        throw new Error('Failed to create session');
+                    }
+                    
+                    const sessionData = await sessionResp.json();
+                    currentSessionId = sessionData.id;
+                    console.log('Created session:', currentSessionId);
+                }
+                
                 const formData = new FormData();
                 formData.append('file', currentFile);
                 formData.append('auto_process', 'true');
-                if (currentSessionId) {
-                    formData.append('session_id', currentSessionId);
-                }
+                
+                // Always attach to session (now guaranteed to exist)
+                formData.append('session_id', currentSessionId);
                 
                 const response = await fetch(`${API_BASE}/documents/upload/`, {
                     method: 'POST',
@@ -395,112 +501,135 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`Upload failed: ${response.statusText}`);
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Upload failed: ${response.statusText}`);
                 }
                 
                 const data = await response.json();
+                currentDocumentData = data;
                 
+                // Show success
                 statusDiv.className = 'upload-status success';
-                statusDiv.textContent = `✅ Success! Processed ${data.chunk_count} chunks from ${data.filename}`;
+                statusDiv.textContent = `✅ Success! Document processed: ${data.chunk_count} chunks created. Ready to chat!`;
                 
-                // Reset file input
+                // Update current document display
+                updateDocumentDisplay(data);
+                
+                // Enable "Start Chat" button (make it green/ready)
+                startChatBtn.disabled = false;
+                startChatBtn.textContent = '🚀 Start Chat';
+                startChatBtn.style.background = '#28a745';
+                
+                // Reset file input for potential re-upload
                 fileInput.value = '';
                 currentFile = null;
                 label.textContent = '📄 Choose a .txt file (max 500KB)';
                 label.classList.remove('has-file');
+                uploadBtn.textContent = 'Upload & Process';
+                uploadBtn.classList.remove('processing');
                 
-                // Reload documents list
-                loadDocuments();
+                // If session already active, clear chat
+                if (currentSessionId) {
+                    document.getElementById('chatBox').innerHTML = '';
+                    addMessage('system', `🔄 New document loaded! Previous chat history cleared. Start chatting with "${data.filename}"`);
+                }
                 
             } catch (error) {
                 statusDiv.className = 'upload-status error';
                 statusDiv.textContent = `❌ Upload failed: ${error.message}`;
                 uploadBtn.disabled = false;
+                uploadBtn.textContent = 'Upload & Process';
+                uploadBtn.classList.remove('processing');
             }
         }
 
-        // Load documents list
-        async function loadDocuments() {
-            // Only load documents for current session
-            if (!currentSessionId) {
-                document.getElementById('documentsList').innerHTML = '<div class="no-documents">Start a chat session to upload documents</div>';
-                return;
-            }
+        // Update document display
+        function updateDocumentDisplay(data) {
+            const displayDiv = document.getElementById('currentDocDisplay');
+            const sizeKB = (data.file_size / 1024).toFixed(1);
+            displayDiv.innerHTML = `
+                <div class="document-info">
+                    <div class="doc-name">📄 ${data.filename}</div>
+                    <div class="doc-stats">${sizeKB}KB • ${data.chunk_count} chunks</div>
+                </div>
+            `;
+        }
+
+        // Handle Start Chat button
+        async function handleStartChat() {
+            const btn = document.getElementById('startChatBtn');
             
-            try {
-                const response = await fetch(`${API_BASE}/documents/`);
-                if (!response.ok) throw new Error('Failed to load documents');
-                
-                const documents = await response.json();
-                const listDiv = document.getElementById('documentsList');
-                
-                if (documents.length === 0) {
-                    listDiv.innerHTML = '<div class="no-documents">No documents uploaded yet</div>';
-                    return;
-                }
-                
-                listDiv.innerHTML = documents
-                    .filter(doc => !doc.session || doc.session === currentSessionId)
-                    .map(doc => {
-                        const sizeKB = (doc.file_size / 1024).toFixed(1);
-                        return `
-                            <div class="document-item">
-                                <span>📄 ${doc.filename} (${sizeKB}KB)</span>
-                                <span class="chunk-count">${doc.chunk_count} chunks</span>
-                            </div>
-                        `;
-                    }).join('');
-                
-                if (listDiv.innerHTML === '') {
-                    listDiv.innerHTML = '<div class="no-documents">No documents uploaded for this session</div>';
-                }
-                
-            } catch (error) {
-                console.error('Error loading documents:', error);
+            if (currentSessionId) {
+                // Reset chat
+                resetChat();
+            } else {
+                // Start new chat
+                await startChat();
             }
         }
 
         // Start a new chat session
         async function startChat() {
+            if (!currentDocumentData) {
+                alert('Please upload a document first!');
+                return;
+            }
+            
             try {
-                const response = await fetch(`${API_BASE}/sessions/`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title: 'RAG Demo Session' })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Session was already created during upload, just show the UI
+                if (!currentSessionId) {
+                    // Fallback: create session if somehow it doesn't exist
+                    const response = await fetch(`${API_BASE}/sessions/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: 'RAG Demo Session' })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    currentSessionId = data.id;
                 }
                 
-                const data = await response.json();
-                currentSessionId = data.id;
-                
                 // Update UI
-                document.getElementById('sessionIdLabel').textContent = data.id;
-                document.getElementById('startChatBtn').textContent = 'Reset Chat';
-                document.getElementById('startChatBtn').onclick = resetChat;
+                document.getElementById('sessionIdLabel').textContent = currentSessionId;
+                document.getElementById('sessionInfo').classList.add('active');
+                document.getElementById('chatContainer').classList.add('active');
                 
-                // Clear chat and show welcome
+                const startChatBtn = document.getElementById('startChatBtn');
+                startChatBtn.textContent = '🔄 Reset Chat';
+                startChatBtn.classList.add('active');
+                
+                // Show welcome message
                 document.getElementById('chatBox').innerHTML = '';
-                addMessage('system', 'New chat session started! Upload documents and ask questions about them.');
+                addMessage('system', `✅ Chat session started! You can now ask questions about "${currentDocumentData.filename}"`);
                 
-                // Load documents for this session
-                loadDocuments();
             } catch (error) {
-                addMessage('error', `Failed to create session: ${error.message}`);
+                alert(`Failed to create session: ${error.message}`);
             }
         }
 
         // Reset the chat session
         function resetChat() {
             currentSessionId = null;
-            document.getElementById('sessionIdLabel').textContent = 'No active session';
-            document.getElementById('startChatBtn').textContent = 'Start Chat';
-            document.getElementById('startChatBtn').onclick = startChat;
+            currentDocumentData = null;
+            
+            // Reset UI
+            document.getElementById('sessionInfo').classList.remove('active');
+            document.getElementById('chatContainer').classList.remove('active');
             document.getElementById('chatBox').innerHTML = '';
-            addMessage('system', 'Chat reset. Click "Start Chat" to begin a new conversation.');
-            loadDocuments();
+            document.getElementById('currentDocDisplay').innerHTML = '<div class="no-document">No document uploaded yet. Please upload a .txt file above.</div>';
+            
+            const startChatBtn = document.getElementById('startChatBtn');
+            startChatBtn.textContent = '⏳ Waiting for document...';
+            startChatBtn.classList.remove('active');
+            startChatBtn.disabled = true;
+            
+            // Reset upload status
+            document.getElementById('uploadStatus').className = 'upload-status';
+            document.getElementById('uploadStatus').style.display = 'none';
         }
 
         // Send a message with SSE streaming
@@ -510,7 +639,7 @@
 
             if (!message) return;
             if (!currentSessionId) {
-                addMessage('error', 'Please start a chat session first');
+                alert('Please start a chat session first by clicking "Start Chat"');
                 return;
             }
 
@@ -598,10 +727,9 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // Initialize
+        // Initialize - show instructions
         window.onload = () => {
-            addMessage('system', 'Welcome! Click "Start Chat" to begin, then upload documents and chat with your AI assistant.');
-            loadDocuments();
+            console.log('ChatServer RAG Demo loaded');
         };
     </script>
 </body>

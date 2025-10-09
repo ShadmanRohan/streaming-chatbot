@@ -71,6 +71,24 @@ class DocumentViewSet(viewsets.ModelViewSet):
         
         # Create document with session binding
         with transaction.atomic():
+            # Delete previous documents AND chat history for this session (one file per session)
+            if session:
+                old_docs = Document.objects.filter(session=session)
+                old_count = old_docs.count()
+                old_docs.delete()  # Cascades to DocumentChunk due to ON DELETE CASCADE
+                
+                # Clear chat history too
+                old_messages = ChatMessage.objects.filter(session=session)
+                msg_count = old_messages.count()
+                old_messages.delete()
+                
+                # Reset session summary
+                session.session_summary = ""
+                session.save()
+                
+                if old_count > 0 or msg_count > 0:
+                    logger.info(f"Cleared session {session_id}: {old_count} document(s), {msg_count} message(s)")
+            
             document = Document.objects.create(
                 filename=uploaded_file.name,
                 raw_text=content,
