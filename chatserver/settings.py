@@ -53,3 +53,10 @@ RAG_CONFIG = {
     "top_k": int(os.environ.get("RAG_TOP_K", "3")),
     "use_mmr": os.environ.get("RAG_USE_MMR", "true").lower() == "true",
 }
+
+# Memory Configuration (Phase 7)
+MEMORY_CONFIG = {
+    "max_tokens_context": int(os.environ.get("CHAT_MAX_TOKENS_CONTEXT", "3000")),
+    "history_min_turns": int(os.environ.get("CHAT_HISTORY_MIN_TURNS", "6")),
+    "summary_interval_turns": int(os.environ.get("SUMMARY_INTERVAL_TURNS", "5")),
+}
