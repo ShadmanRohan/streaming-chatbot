@@ -308,10 +308,10 @@ class PromptTests(TestCase):
         self.assertNotIn("Ignore previous instructions", sanitized)
     
     def test_build_simple_prompt(self):
-        """Test simple prompt building"""
-        from chat.prompts import build_simple_prompt
+        """Test simple prompt building using build_chat_prompt"""
+        from chat.prompts import build_chat_prompt
         
-        messages = build_simple_prompt("What is AI?")
+        messages = build_chat_prompt("What is AI?", retrieved_chunks=[], context_messages=[])
         self.assertEqual(len(messages), 2)  # system + user
         self.assertEqual(messages[0]['role'], 'system')
         self.assertEqual(messages[1]['role'], 'user')

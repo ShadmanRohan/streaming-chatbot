@@ -149,20 +149,3 @@ def build_chat_prompt(
     
     return messages
 
-
-def build_simple_prompt(user_message: str) -> List[Dict[str, str]]:
-    """
-    Build a simple prompt without RAG or context.
-    Useful for testing or simple Q&A.
-    
-    Args:
-        user_message: User's question
-        
-    Returns:
-        Simple messages array
-    """
-    return [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": sanitize_user_input(user_message)}
-    ]
-
