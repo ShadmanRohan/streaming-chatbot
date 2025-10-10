@@ -7,6 +7,13 @@ import os
 
 def health(_): return JsonResponse({"status": "ok"})
 
+def demo_view(request):
+    """Serve the demo HTML file at root path"""
+    demo_path = os.path.join(settings.BASE_DIR, 'static', 'sse-demo.html')
+    with open(demo_path, 'r') as f:
+        content = f.read()
+    return HttpResponse(content, content_type='text/html')
+
 def sse_demo(request):
     """Serve the SSE demo HTML file"""
     demo_path = os.path.join(settings.BASE_DIR, 'static', 'sse-demo.html')
@@ -19,6 +26,7 @@ urlpatterns = [
     path("health/", health),
     path("api/", include("chat.urls")),
     path("demo/", sse_demo, name="sse-demo"),
+    path("", demo_view, name="demo"),  # Serve demo at root
 ]
 
 # Serve static files during development

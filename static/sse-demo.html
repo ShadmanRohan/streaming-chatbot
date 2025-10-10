@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChatServer - RAG Demo</title>
+    <title>ChatServer - RAG Demo v2.2</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -455,8 +455,16 @@
         });
 
         // Upload document
+        let isUploading = false;  // Guard against double-clicks
+        
         async function uploadDocument() {
             if (!currentFile) return;
+            if (isUploading) {
+                console.log('Upload already in progress, ignoring duplicate call');
+                return;
+            }
+            
+            isUploading = true;
             
             const uploadBtn = document.getElementById('uploadBtn');
             const statusDiv = document.getElementById('uploadStatus');
@@ -499,18 +507,24 @@
                 formData.append('session_id', currentSessionId);
                 
                 console.log('Upload: Starting document upload...');
+                console.log('Upload: FormData contents:', {
+                    file: currentFile.name,
+                    size: currentFile.size,
+                    session_id: currentSessionId
+                });
                 
-                // Add timeout to prevent hanging
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                console.log('Upload: Sending fetch request to:', `${API_BASE}/documents/upload/`);
                 
                 const response = await fetch(`${API_BASE}/documents/upload/`, {
                     method: 'POST',
-                    body: formData,
-                    signal: controller.signal
+                    body: formData
+                }).catch(err => {
+                    console.log('Upload: Fetch error caught:', err);
+                    console.log('Upload: Error name:', err.name);
+                    console.log('Upload: Error message:', err.message);
+                    console.log('Upload: Error stack:', err.stack);
+                    throw err;
                 });
-                
-                clearTimeout(timeoutId);
                 
                 console.log('Upload: Document upload response:', response);
                 
@@ -575,16 +589,18 @@
                 
             } catch (error) {
                 console.log('Upload error:', error);
-                if (error.name === 'AbortError') {
-                    statusDiv.className = 'upload-status error';
-                    statusDiv.textContent = '❌ Upload timed out after 30 seconds. Please try again.';
-                } else {
-                    statusDiv.className = 'upload-status error';
-                    statusDiv.textContent = `❌ Upload failed: ${error.message}`;
-                }
+                console.log('Upload error details:', {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack
+                });
+                statusDiv.className = 'upload-status error';
+                statusDiv.textContent = `❌ Upload failed: ${error.message}`;
                 uploadBtn.disabled = false;
                 uploadBtn.textContent = 'Upload & Process';
                 uploadBtn.classList.remove('processing');
+            } finally {
+                isUploading = false;  // Reset the flag
             }
         }
 
