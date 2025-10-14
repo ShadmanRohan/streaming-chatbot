@@ -2,6 +2,8 @@
 
 Django 5 backend with document ingestion, semantic search (with MMR), LangGraph orchestration, and streaming chat capabilities.
 
+![Demo Animation](intro.gif)
+
 🚀 **Live Demo**: [https://191.101.81.150](https://191.101.81.150) ← **Use this for public access**  
 💻 **Local Development**: [http://localhost:8000/demo/](http://localhost:8000/demo/) (when running locally)
 
@@ -689,6 +691,9 @@ chatserver/
 
 **Production Demo**: [https://191.101.81.150](https://191.101.81.150) ← **Access the live system here**  
 **Local Development**: [http://localhost:8000/demo/](http://localhost:8000/demo/) (when running locally)
+
+![How to Use Demo](intro.gif)
+*Watch the demo animation to see how to upload documents and chat with your data*
 
 **Features:**
 - 📄 **Document Upload**: Upload .txt files (max 500KB) and bind to chat sessions
